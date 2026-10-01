@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administration · Mzazi Care</title>
+<meta name="description" content="Find trusted maternal and childcare services in Nairobi.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="site-header"><div class="container nav">
+  <a class="brand" href="index.html">MZAZI CARE</a>
+  <nav class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="search.html">Browse services</a>
+  </nav>
+  <div class="nav-actions" id="nav-actions"></div>
+</div></header>
+<main class="container" style="padding-top:1rem">
+  <h1>Administration</h1>
+  <div class="tabs">
+    <button class="tab active" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="pending">Pending verification</button>
+    <button class="tab" data-view="listings">All listings</button>
+    <button class="tab" data-view="form">Add listing</button>
+    <button class="tab" data-view="logs">Activity log</button>
+  </div>
+  <div id="admin-root"><div id="admin-view"></div></div>
+</main>
+<footer style="border-top:1px solid var(--line);margin-top:2rem;padding:1.25rem 0;background:#fff">
+  <div class="container muted">Mzazi Care Discovery &amp; Catalog System · capstone prototype · seeded with synthetic data</div>
+</footer>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/admin.js"></script></body></html>

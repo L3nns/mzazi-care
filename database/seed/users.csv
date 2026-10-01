@@ -1,0 +1,244 @@
+user_id,full_name,email,password_hash,phone_number,location,role,created_at,segment_label_synthetic_only
+1,Syokau Mutiso,user001@example.com,$2b$12$AhcHQubC2us7DHUYhX8rTDdjWJhXvOj7tnwuPoJmQJQXfuWgsL5Yv,+254748744138,Kasarani,user,2026-05-18 12:00:00,new_mother
+2,Kevin Kamau,user002@example.com,$2b$12$PWJ7CMB290mPnLzNlppYbE3sGUZ1bocwLi3LDgnWtKbUp6hlSDW7O,+254724450776,Gigiri,user,2026-03-13 10:00:00,working_parent
+3,Martin Mwangi,user003@example.com,$2b$12$liOmwno4UWtJzzbnSL4K6NAL1pWesUiSaeByS3spV5noLXAoLenRs,+254785137756,Karen,user,2026-04-25 10:00:00,infant_health
+4,Wanjiru Wafula,user004@example.com,$2b$12$u1I790UI3kWVZWN9tMElE7J9wPCN7U8AewaVQf8n9VNhQ3114kR8g,+254747949082,Donholm,user,2026-05-25 15:00:00,infant_health
+5,Kagure Chelimo,user005@example.com,$2b$12$m84oIzSJPodubjVJV1BtRAEVu4Yngw5CyGQlFW7LWSXPiTnoBbLzi,+254760874435,Lavington,user,2026-06-08 14:00:00,toddler_development
+6,Mwikali Odhiambo,user006@example.com,$2b$12$l2MirsoXQGv2tqZWblvPTsZJiqVlhkw7Vvb1Q7Y8WVZnbtUPsX8uG,+254728748869,Buruburu,user,2026-04-18 11:00:00,new_mother
+7,Martin Mutiso,user007@example.com,$2b$12$nFxgIPt2cPxX1Dkgi5nfCZ0HKtxiwcunRkc05l6USPUD2qbdqdLMa,+254786264173,Embakasi,user,2026-03-20 14:00:00,early_pregnancy
+8,Wambui Njoroge,user008@example.com,$2b$12$KScBz33IsOCdwR7pMxNVKZbouPT5HxJpf5zMGijEYpW8KMXXGooka,+254788997580,Donholm,user,2026-04-07 15:00:00,maternal_wellbeing
+9,Wambui Mwangi,user009@example.com,$2b$12$UzN86tXYfM2tZsojNtyic97XLumGrsQT3zi8BDcsBX6IecbegZjFO,+254798246637,Embakasi,user,2026-07-26 08:00:00,working_parent
+10,Chepkoech Omondi,user010@example.com,$2b$12$tL7BR8GJWXaMS9Y0RAfVpWYOqAgCGyqOkiFHHzWgn83LfnfawPxdS,+254749643262,Kikuyu,user,2026-06-12 14:00:00,new_mother
+11,Kevin Nzioka,user011@example.com,$2b$12$vwQNIwUSYyyRuG9yPurYOM9JHCDH7Yerbo2Sd7yUqhyJTFQeAwPJ7,+254737731174,South B,user,2026-05-10 21:00:00,birth_preparation
+12,Atieno Ochieng,user012@example.com,$2b$12$WyU6cv7h7cT4YYNmY4AAFDJuJ3wPLe3LNpdeoRxVHAynwCJN4iObs,+254785982461,South B,user,2026-05-24 20:00:00,infant_health
+13,Akinyi Nzioka,user013@example.com,$2b$12$XBqoTN7zJKMwLGTjSL7e8YD2PexTSls5HDuZ1Bi8XAQ7KtCV8MSll,+254712312290,Embakasi,user,2026-04-30 16:00:00,maternal_wellbeing
+14,Nyambura Chelimo,user014@example.com,$2b$12$anUQ27R6iDCF2WN78y8z5qUoSMhhHKG2BcCyCKQWgY3X7nmgtrBFf,+254729145647,Langata,user,2026-04-02 19:00:00,new_mother
+15,Collins Kilonzo,user015@example.com,$2b$12$ltHsiROCMk2BHSY2FayCB0GMqF8d9oOiHjHJhqryKcHiw8f3LBPou,+254711776788,Ruaka,user,2026-03-29 21:00:00,infant_health
+16,Achieng Ochieng,user016@example.com,$2b$12$oWxu8Ba32chMIfEGeMMud7uxnIjnUv8MqRw9NS9CTFV20tGZNghyv,+254760931116,Donholm,user,2026-03-19 16:00:00,infant_health
+17,Jepkosgei Kilonzo,user017@example.com,$2b$12$eY7nJBQY0fJC0vJlezjCAIC4PkxGWnLQZyqQZ1LHRZA7GYEjAhght,+254711469587,Buruburu,user,2026-04-23 11:00:00,toddler_development
+18,Kagure Rotich,user018@example.com,$2b$12$o3HQKsFf87xqa5LkCIuw4fEQpdSC3Kiz26HoKWJHyI4KrshNxmaZO,+254764850211,Roysambu,user,2026-04-03 10:00:00,birth_preparation
+19,Wangari Kilonzo,user019@example.com,$2b$12$ZF08AAzNSX2fPecSCh4gwG6V6Mq3F37RuHZT8E6osUdH8w28tFU5X,+254779477522,Kileleshwa,user,2026-05-19 13:00:00,early_pregnancy
+20,Samuel Githinji,user020@example.com,$2b$12$vPZTb2064xLX443Wc5Wn6MZsmaxS7Xc2xz7PpKGrAxyuWvjvzrmxc,+254769344409,Ngong Road,user,2026-07-18 12:00:00,toddler_development
+21,Chepkoech Omondi,user021@example.com,$2b$12$hibqQSqFLFws3we0WinY5s0I8udkDf33sy86JhzoTfzWIbV9aNumI,+254726592577,Buruburu,user,2026-03-22 21:00:00,new_mother
+22,Wambui Kiprop,user022@example.com,$2b$12$EM2IFhPpfrf94pwCfC0jK3b5KBIp2nuNwe6rXXpbIIeruP2txvMh5,+254719206709,Gigiri,user,2026-03-25 10:00:00,new_mother
+23,Mwikali Otieno,user023@example.com,$2b$12$f3zsrgb1XQlPFQSX68pA0XbVBs8Ll369PGf2Xaue02Wtj5iZ6k8vZ,+254724707256,Donholm,user,2026-04-26 20:00:00,toddler_development
+24,Wanjiru Mwangi,user024@example.com,$2b$12$MgrtGahDG1g7NcVf295avp3tpmupMlJ7GIqzG1PejJS9QdOQFTfp7,+254740586022,Upper Hill,user,2026-07-24 18:00:00,new_mother
+25,Akinyi Rotich,user025@example.com,$2b$12$2SVaIJ49soCEZZGvDqkGGwKG3X2txgnYbi1rJ6FZRIfmnmoMLn0tq,+254759829504,Donholm,user,2026-04-13 13:00:00,infant_health
+26,Syokau Were,user026@example.com,$2b$12$57ATvz7QVFxwvFzuIvqk405Baw26yaCbxo7Xm60VWddjPXi2fJphW,+254789403884,Ruaka,user,2026-04-14 08:00:00,birth_preparation
+27,Syokau Ochieng,user027@example.com,$2b$12$vm9zJPCU55lGe1cdtaJW3xPPUePFiAumR2usYA6cPvnw4jX84yLmc,+254710685992,Buruburu,user,2026-03-18 07:00:00,toddler_development
+28,Nyambura Maina,user028@example.com,$2b$12$2ujCj2cZc8kq9b691Bwj9DXsCaJHgGcSPY8vTzRdBROmTmFh3ncRN,+254745521734,Upper Hill,user,2026-07-12 08:00:00,new_mother
+29,Muthoni Kiprop,user029@example.com,$2b$12$vmMTeVLSdEomAp50BtFHy72iHOYREhxgutNsR4b784SuifcEOq6i9,+254768501191,Embakasi,user,2026-03-30 10:00:00,new_mother
+30,Eric Maina,user030@example.com,$2b$12$jCs80yvc76Xo7GkbFvWgbs1cRmtBWlKWw0mMeqquZqzg7KzqvV8Hn,+254732250934,South B,user,2026-04-30 16:00:00,new_mother
+31,Syokau Maina,user031@example.com,$2b$12$bQBtgeQ5eSOuc6i6rojMr6VAVmUMbiwbhr9jcSqkcUl5hdvtkrgMu,+254796304129,Buruburu,user,2026-04-03 10:00:00,maternal_wellbeing
+32,Victor Omondi,user032@example.com,$2b$12$YWEFMaZJidgNxK3RNl8nq1k4LsEdi8C22EL0warTNRVR3IeJnBvKN,+254754539947,Gigiri,user,2026-03-23 21:00:00,early_pregnancy
+33,Kagure Njoroge,user033@example.com,$2b$12$J8K8MFo8YPC197jrL7XkZaBBrlQ9gdbvLeDD1yXRXKLWnGgphahyO,+254791340147,Embakasi,user,2026-05-22 07:00:00,new_mother
+34,Nyambura Mutiso,user034@example.com,$2b$12$uahlDBX8na3S653lMjdMyF6VHbLus6IGmz5Xeyu30ClfRAxqE0g9B,+254752883086,Karen,user,2026-03-18 16:00:00,working_parent
+35,Chebet Chelimo,user035@example.com,$2b$12$uFTwsR8GgmWXz9pQpU6Rdb4aOKxnQXOJpb9VROYGAs5r7qrVWohaa,+254717571871,Kileleshwa,user,2026-04-20 18:00:00,infant_health
+36,Kagure Rotich,user036@example.com,$2b$12$GFoCFQn1cOc0ekXi5iTV50E3MBn9CSJzSkJSHP3ZWi5BUvSTUZpTM,+254768479860,Kikuyu,user,2026-05-13 16:00:00,maternal_wellbeing
+37,Martin Maina,user037@example.com,$2b$12$ru4hkk8J5ZepKKzZZv60Lc6jhhkCXMUJJLAgjrT5WlT5i4XsBATsr,+254751148657,Ruaka,user,2026-03-30 19:00:00,birth_preparation
+38,Martin Barasa,user038@example.com,$2b$12$mpdPViAl1A02PT2j8AEB7OOpktze2ejXCoqhdOnVOXT9lWmao87xb,+254755709790,Kileleshwa,user,2026-03-12 14:00:00,new_mother
+39,Wambui Otieno,user039@example.com,$2b$12$VNhsi7BHkLrd9MCahIKTCf3uJLzKJ5Yv7nDcduHMWEiVVfQVCwB2G,+254719159724,Runda,user,2026-04-07 16:00:00,special_needs
+40,Wairimu Barasa,user040@example.com,$2b$12$HLK6gnOn6gKpmvJQF9vIUzMj6K7fC0rQkChog5QyIWV3kbKuaI8XB,+254752063200,Lavington,user,2026-05-16 12:00:00,new_mother
+41,Collins Mwangi,user041@example.com,$2b$12$DUYcn35uQdcPOGEGgZVQBPqsHbxlzFr9FUBGTcYSjVIIbQ4ukuG3f,+254735445054,Ruaka,user,2026-07-06 14:00:00,birth_preparation
+42,Muthoni Odhiambo,user042@example.com,$2b$12$EPO76wd7m64NVLS1yWHHtEMs0uWEh3HVtdo7FhpmAOnW4CCVnFz0b,+254724388210,Runda,user,2026-03-18 12:00:00,new_mother
+43,Wambui Odhiambo,user043@example.com,$2b$12$xn0ZH1fGvkqvdoR9NrTEiz37euO3kkVEKNahxXbTTknxYG20zjXeA,+254710054415,Lavington,user,2026-03-15 19:00:00,early_pregnancy
+44,Joseph Were,user044@example.com,$2b$12$dWMvd84MYUO3EM0d4jd7VsjvXPKpnuMopGnvzfN5dlPFb2v160mjO,+254740375464,Roysambu,user,2026-06-17 14:00:00,new_mother
+45,Adhiambo Chelimo,user045@example.com,$2b$12$fSfV6O8NSM3UN4PSuJ5jOEuSKy46VqrQZua6tc0KfrJicbpeDHhvU,+254786408632,Kasarani,user,2026-04-28 10:00:00,early_pregnancy
+46,Syokau Maina,user046@example.com,$2b$12$Endew4z98zqYD5Fr8CcILDznxxgbDx372PvRwY6SRGHb7fpEf3lLU,+254720265304,Roysambu,user,2026-03-12 10:00:00,early_pregnancy
+47,Collins Nzioka,user047@example.com,$2b$12$Uz3y65uZX94uTdRBfjW1mC8YAsrZaQwN4crkESfm0teWhfAuhloAr,+254764020548,South C,user,2026-05-03 08:00:00,early_pregnancy
+48,Dennis Maina,user048@example.com,$2b$12$BKmBwG3t3DflSAekberbNEsqNPmRydxnElvoFbbzbA70pumSPkc7e,+254767864836,Ruaka,user,2026-05-03 08:00:00,toddler_development
+49,Adhiambo Chelimo,user049@example.com,$2b$12$posjDp9YlGXuIih3QKchpEE4jt1gCjOv5rTyZsncTeK0HLDLhZZLt,+254782941646,Upper Hill,user,2026-03-24 12:00:00,infant_health
+50,Syokau Kiprop,user050@example.com,$2b$12$AG89WVI1Jkqi6B3XvCpB3yozWm53HmehgDEgM9T3kPop6fKjAWzPJ,+254792121935,Langata,user,2026-05-03 17:00:00,working_parent
+51,Felix Kamau,user051@example.com,$2b$12$Yiy5jdHm8oTI211K73DHw80LKGooWsfQCfyaBOkmtVtAhHtx2DCsJ,+254795553921,Westlands,user,2026-04-01 07:00:00,infant_health
+52,Dennis Rotich,user052@example.com,$2b$12$oLnyKvuQ0EUkOacUAN1G8hWoNpkJtG7eDxSV6wXiDnrq3R3yhchNs,+254781766114,Roysambu,user,2026-04-23 18:00:00,new_mother
+53,Akinyi Were,user053@example.com,$2b$12$Q4nVZJdtsHfCCValHivIfA6fR54rEsMZkio7hV80heGVbAXbJ6yxk,+254753585016,Langata,user,2026-05-26 07:00:00,special_needs
+54,Adhiambo Chelimo,user054@example.com,$2b$12$dxQBNxJWttqZpHkSZk0U2m4gLafDrORFo4CSXgfiy8DWhdjNJMCPy,+254747595545,Kilimani,user,2026-03-15 07:00:00,new_mother
+55,Felix Nzioka,user055@example.com,$2b$12$jdoPt9gj7161dzsdlqz6vgjm7bLm41H80Msc7Hr80Sj23Oc1LMVDh,+254763629898,Runda,user,2026-04-12 21:00:00,infant_health
+56,Wairimu Kiprop,user056@example.com,$2b$12$HQvDK9aXnb8N5TMlcJ2nLEkejRxJ7WOOMZiwnm6K9tsAcDo2HpLgt,+254790768564,Lavington,user,2026-04-13 09:00:00,new_mother
+57,Wambui Kiprop,user057@example.com,$2b$12$GP70iIXP47rrJw792NFqb4rqfhnVsFH7M5qJHoR9Ykf9E5JDAiUxg,+254764254126,Westlands,user,2026-04-17 21:00:00,toddler_development
+58,Wangari Githinji,user058@example.com,$2b$12$RoOU5JJ7ZkPCv0MBjHUXfbZmojzyi1Vx8C0mprZY3zQgeJWu1AHRH,+254764858617,Karen,user,2026-03-18 07:00:00,early_pregnancy
+59,Brian Nzioka,user059@example.com,$2b$12$VvA89EIwryz5y7y0tJB4oWy6nER9wtvxGgWcqxh7EOeofcOCIsHua,+254796963268,Langata,user,2026-03-23 15:00:00,birth_preparation
+60,Wangari Githinji,user060@example.com,$2b$12$MKkNLoFEIMKkKUlJ0cRnDfjJVoQbIuukNJrqCeXQ7rvRrWkSrDFgc,+254799991013,Embakasi,user,2026-04-15 14:00:00,special_needs
+61,Achieng Rotich,user061@example.com,$2b$12$WBFMr3v8790JlFscCSjmMBj8YFFfTQBeqkhpdmCsYPg6G9bdOugc5,+254780592341,Parklands,user,2026-04-18 11:00:00,special_needs
+62,Eric Githinji,user062@example.com,$2b$12$sRaz2tSZ0eEUqhB1t8K6JbIZ96EV9xD90J174t2iQWr7OlKiX9UAB,+254738534311,Upper Hill,user,2026-04-14 18:00:00,special_needs
+63,Eric Barasa,user063@example.com,$2b$12$WsA7zVDEDr2pG6Hy7PzKOtuj931KK2qGKVlDPaubESK6qfKJrgP7T,+254764792588,Westlands,user,2026-05-17 14:00:00,infant_health
+64,Muthoni Mwangi,user064@example.com,$2b$12$ML2cmbOvMvo6MuGmpnmKneWgFLcfoE6vlQU4eKozrcCJvBjMLUcq4,+254726902784,Kilimani,user,2026-05-06 16:00:00,new_mother
+65,Nasimiyu Chelimo,user065@example.com,$2b$12$eKImLV0B8yVCaLrciJZiNokttRCnmy25j41LdB6UiRjQjwkhvtot5,+254757070308,Buruburu,user,2026-03-27 12:00:00,infant_health
+66,Jepkosgei Chelimo,user066@example.com,$2b$12$g3a6gZyPHVEZjpnja8v0E04R0GEgYDdJUr663RCCSOqDM3B9ResqG,+254717424448,Westlands,user,2026-06-18 11:00:00,new_mother
+67,Atieno Njoroge,user067@example.com,$2b$12$eHq1k7XHzO2ZLyRgXiZbJlg71SOsKDIAX2I461bZaK85ibj5PdN5a,+254779568077,Embakasi,user,2026-03-10 17:00:00,early_pregnancy
+68,Akinyi Githinji,user068@example.com,$2b$12$9ZdIrOlOad5OBGESMvcViPZZc6P04qIiPjxE3tjirmCtgvNGlMBAY,+254784105154,Donholm,user,2026-03-21 11:00:00,early_pregnancy
+69,Kagure Nzioka,user069@example.com,$2b$12$uFk1tK6zHoDyBVAfmkt8qdpKEPLLxmxeNYWg6bPRUGFCtC32EzuKq,+254719802371,Ruaka,user,2026-03-13 20:00:00,infant_health
+70,Mwikali Barasa,user070@example.com,$2b$12$tITSUHKLfmPd7AocOHpArIFRA07MTZLtPCB3Qb1GStQ82rbJde5ib,+254729853866,Runda,user,2026-06-23 11:00:00,birth_preparation
+71,Kanini Njoroge,user071@example.com,$2b$12$suw3gknESAVBVJu5YdBF4Do9OtPuL3okDr5AIX9rZa1OjqvhalXew,+254723754017,Buruburu,user,2026-03-27 13:00:00,new_mother
+72,Kagure Githinji,user072@example.com,$2b$12$uQMUmMwvBlx9O6ESyLIEFoTLu3aWf3F4OeXhXiGGUjDfCEmtJJWLa,+254746574599,Kikuyu,user,2026-03-30 20:00:00,new_mother
+73,Njeri Chelimo,user073@example.com,$2b$12$VIsoQ66xakhvNZZtbTHnFCP7Xb9ZOb5u8G8lBgyUFm4GUYWjCjsnl,+254712345953,Lavington,user,2026-03-16 20:00:00,new_mother
+74,Dennis Ochieng,user074@example.com,$2b$12$POnnvfWstYSZoWXHmHQFF8jvFzYoGuwXeidDJTLi4W3JkV2I1W1kr,+254727080398,Donholm,user,2026-03-19 07:00:00,new_mother
+75,Achieng Njoroge,user075@example.com,$2b$12$eK48xu264rCfeNVyxRtR5j0U33pYgaalKAGFpZxUZ2rZrnI3ZXB9Q,+254792426918,Ngong Road,user,2026-06-18 19:00:00,birth_preparation
+76,Nasimiyu Were,user076@example.com,$2b$12$hMW47zpTQ3AkOsbRrfPCltdzgaf2yjLqMEyZBrIpYptikK3CETddx,+254797046248,Gigiri,user,2026-04-27 08:00:00,maternal_wellbeing
+77,Muthoni Kiprop,user077@example.com,$2b$12$KijKnxiGPWdplDhct03sg01chOcqfDzBbVHGkdZKLjaEpj6eNKuiB,+254747527498,Kileleshwa,user,2026-03-28 20:00:00,working_parent
+78,Joseph Kiprop,user078@example.com,$2b$12$9deBB50mQG7FOzi0WjKR5G1ev6y10WHSYecVqvBd2PwuRQ82rEIOk,+254778194012,Roysambu,user,2026-06-03 15:00:00,working_parent
+79,Jepkosgei Rotich,user079@example.com,$2b$12$1X2CnUHBE6NVJiCpOayrhGIaLoetimafnJneSDRfPzcj3NxzhI0CL,+254748624435,Runda,user,2026-04-29 14:00:00,new_mother
+80,Wangari Kilonzo,user080@example.com,$2b$12$vzHUZNTD0eGyliU4lLz5Hxky3c3QpOLXaufgcIG4pkcTHj7dxC8bB,+254755519149,Buruburu,user,2026-03-11 20:00:00,infant_health
+81,Wairimu Were,user081@example.com,$2b$12$Ep32ubAJoNQT6vA3WplDFiECfC5lk4U32RgORcQcAQ4qJVnljkgE3,+254723081563,South B,user,2026-04-23 16:00:00,infant_health
+82,Atieno Njoroge,user082@example.com,$2b$12$Kpd8HKhjhsPugSHyW0dCBrX3FRfTYBOWIgUhQS13xAXHa9dKwH2ZC,+254799229556,Buruburu,user,2026-04-06 21:00:00,birth_preparation
+83,Dennis Kariuki,user083@example.com,$2b$12$t0ifxM7BFjBNPVQ0iIdXwOqI41fn8TwdtMDbRs5ToSl2C26ueyJvy,+254789340418,South B,user,2026-05-21 21:00:00,toddler_development
+84,Chepkoech Mwangi,user084@example.com,$2b$12$SSouf4JdLmhmFzaliQapTzvZyZAvlteHbW9FgMJCwlYRHxzlZcvi3,+254722600168,Kasarani,user,2026-04-16 12:00:00,maternal_wellbeing
+85,Nyambura Githinji,user085@example.com,$2b$12$NyzB7YGZBbLfYd4tRlj22Zc610OdVVIssqYMVQlmzchKe0pY34ZgV,+254748655618,South C,user,2026-03-03 17:00:00,early_pregnancy
+86,Achieng Otieno,user086@example.com,$2b$12$jvJzxACSm6AaZrl8VE9M1OvBDyrworwegOvWCO0RaPMdZRP83eOvT,+254792247266,Kileleshwa,user,2026-03-21 09:00:00,birth_preparation
+87,Achieng Kiprop,user087@example.com,$2b$12$16caJYIBwQuz2B16oN7bKt6xqDWlRCCvxjLTpcsIJTEjuilk5Zlb0,+254742677369,Kikuyu,user,2026-04-08 09:00:00,working_parent
+88,Kagure Maina,user088@example.com,$2b$12$ixIiWCSF830tEvTRSRkzhRoIcwZ0ev3aENwh9aXiEsH9Vz4NvOrKX,+254788380887,Kilimani,user,2026-04-17 07:00:00,early_pregnancy
+89,Felix Kiprop,user089@example.com,$2b$12$flQ8M1kacYD8UayFoH4BFAcN36XUc51gRov6X4gRAtpZYCs1nqUI2,+254772748227,Kileleshwa,user,2026-04-17 18:00:00,working_parent
+90,Muthoni Kilonzo,user090@example.com,$2b$12$O4cAiHY8mLkPSnYrqbqjlQQgrrXlPbn47rcG3luoaRUVKivuUuDZz,+254723771289,Parklands,user,2026-03-29 12:00:00,working_parent
+91,Brian Mwangi,user091@example.com,$2b$12$2ogPQUWsDw5HjcibwxzA3IZqsPWV36lxh9qNGeGkHg1UUVI5u6l5t,+254793185734,Ruaka,user,2026-03-16 08:00:00,infant_health
+92,Jepkosgei Mwangi,user092@example.com,$2b$12$syhPRBZXUYEn58UFXDOW3FLeUoaRdDCpsmhAIOSxyvuxtwBPv96DC,+254734559748,Parklands,user,2026-03-11 12:00:00,working_parent
+93,Jepkosgei Maina,user093@example.com,$2b$12$gyGXTNuITqdKVvlF91cFS6GOSCytkaNhzjRURlluSEvostfax9iPV,+254787710133,Kasarani,user,2026-04-13 11:00:00,working_parent
+94,Felix Maina,user094@example.com,$2b$12$wyQq0juDYw1OJf2ZJlJ6qhgyDSn5OJ8xUPBFKfMD3nFg4AAiRS4tX,+254740773997,South C,user,2026-04-28 11:00:00,working_parent
+95,Njeri Njoroge,user095@example.com,$2b$12$a5jiK3eVpaM0Ee5QHHPP3fcfXt1hMaamFP5wERUjlgg4QRVK33Uz4,+254736164024,Roysambu,user,2026-03-18 07:00:00,birth_preparation
+96,Achieng Juma,user096@example.com,$2b$12$rBVXxGvbyTQlSLAa5aXlg1mV6FTC42bbrYAJNsK9CbmrOlaOPWoA6,+254740465733,Gigiri,user,2026-07-16 16:00:00,maternal_wellbeing
+97,Brian Kiprop,user097@example.com,$2b$12$GQipJJOzowlyw46DTn7tzhF2uYYiMWd8GHrTauHFOKXVtIAlqptJX,+254773811847,Westlands,user,2026-04-04 08:00:00,maternal_wellbeing
+98,Nasimiyu Njoroge,user098@example.com,$2b$12$4eJkd0yLNzckkUuQxCnLjRTerrkgG8DxoqXHZ3uaR0mOB7adAiAqh,+254781085405,Kasarani,user,2026-03-30 15:00:00,early_pregnancy
+99,Collins Nzioka,user099@example.com,$2b$12$A4NvwxtyKHO8FIanZ2dwL0HLQT5v7ageZ2tMF9EbibSxPyZmMIEFM,+254726018294,Ngong Road,user,2026-04-19 12:00:00,new_mother
+100,Atieno Mwangi,user100@example.com,$2b$12$LPCVeglH3Yxs1YFpDpqzuEsaCLxgy9Dwa3EHF3TNKnLFgsiYmBSmw,+254796552398,Ruaka,user,2026-03-21 20:00:00,working_parent
+101,Joseph Ochieng,user101@example.com,$2b$12$qnxQHTxTnGVEEQY5ieNpNzCdb0k6w3lX0ZfxTTB4tty0GBuz9jU7G,+254724257853,Kilimani,user,2026-04-18 21:00:00,birth_preparation
+102,Wangari Kiprop,user102@example.com,$2b$12$WqcDDQw3ZhC7H0nHmC7FayN7fL17vTtISPrquyyhCORN0lymxaaBN,+254719420663,South C,user,2026-03-14 11:00:00,new_mother
+103,Syokau Were,user103@example.com,$2b$12$7BSMNYLuX3a74gA0CRdubZaVe5FAHl1mWBT9gKfipjmd5ivYxzwmL,+254774930256,South C,user,2026-03-29 09:00:00,birth_preparation
+104,Njeri Wafula,user104@example.com,$2b$12$Yr67CceaLieSvlMshMcll9Rc9b5wAamk1ZNyPrh8eIpcSg3CZxLXW,+254734913044,Donholm,user,2026-05-20 11:00:00,early_pregnancy
+105,Mwikali Ochieng,user105@example.com,$2b$12$WmqNAhjEz7sNzhzCxi15HszBghg1XQa5LGePs8iX3gQ7WGH0THewK,+254793795558,Gigiri,user,2026-04-22 16:00:00,new_mother
+106,Brian Kiprop,user106@example.com,$2b$12$9haIaTXDyKaecOvvLHzjjuxkzZI86bpGmb0qNTDi7PwqiCTPY2zVN,+254724648173,Gigiri,user,2026-04-13 19:00:00,toddler_development
+107,Jepkosgei Ochieng,user107@example.com,$2b$12$x2ujCKFSNtxRXfSwrXNdeuMPCo5WIcPOeldA9sMm5lADcDUF6NMa4,+254735668126,Roysambu,user,2026-03-25 12:00:00,birth_preparation
+108,Chepkoech Githinji,user108@example.com,$2b$12$C7nJS4aQTcnWrk9bylzha2grBlWd17NPylLKyJ7qRu5qrOoBShYv7,+254759465858,Parklands,user,2026-04-22 15:00:00,birth_preparation
+109,Samuel Rotich,user109@example.com,$2b$12$1KpPF4a4n8zJGoaUEuJHApdWEs7LMvbLbvgF9bQJbAy9wdQ15e54k,+254756749045,Buruburu,user,2026-05-19 12:00:00,special_needs
+110,Muthoni Omondi,user110@example.com,$2b$12$EOnG66ENKAGbaUadn03HXd9jtE89kY5dW9gHxabeKHFHcFZ88lH0w,+254736713785,Westlands,user,2026-03-30 17:00:00,new_mother
+111,Kanini Kilonzo,user111@example.com,$2b$12$RYIt4uu43FpA6kgfTJ30BNnsjpFzpFMgJJMP8JDSppTaRpEWvKHPU,+254762141990,Buruburu,user,2026-04-27 14:00:00,working_parent
+112,Wangari Mwangi,user112@example.com,$2b$12$fCYTpWDciiwq5N9TqArvopvkvnJIWb4tvOPS8CWugytBDHLsoHj9l,+254752231604,Kilimani,user,2026-06-12 21:00:00,infant_health
+113,Kagure Omondi,user113@example.com,$2b$12$EEb0MkyVhJzrp90TwyHNBSK8qwJfkMAnSVWRfUFI4WiKnClyPGWM2,+254755233460,Ruaka,user,2026-06-03 17:00:00,early_pregnancy
+114,Akinyi Githinji,user114@example.com,$2b$12$PpQmsaootjrUEdQkdphXTvUdveRDZ1z0ViPIuCuPw1jELbvjuVz8l,+254724794365,Karen,user,2026-04-18 09:00:00,birth_preparation
+115,Njeri Ochieng,user115@example.com,$2b$12$YKlWFA3re6SlyULK0lLhJRJxnrzeOCc0ggN23W22retx0dYwkOUKw,+254730491467,Kileleshwa,user,2026-03-11 10:00:00,infant_health
+116,Chebet Odhiambo,user116@example.com,$2b$12$ILd8Oqb7roMXmG65aeQ1nnyKAvQ2CObRvllZZ3c4wKpcgAhZAunpA,+254791032309,Ruaka,user,2026-04-07 21:00:00,toddler_development
+117,Jepkosgei Kariuki,user117@example.com,$2b$12$La1iak7pls5KB724COmYPyAQcKxtxH3x7XeOZE7LelTnrwlDbsuIQ,+254734549350,Kileleshwa,user,2026-03-17 10:00:00,working_parent
+118,Achieng Mutiso,user118@example.com,$2b$12$6BL2U8KHDVyZsf17Hj7f2bZONSzaoSZG1IpOYVvEx9sTzPOaul0jh,+254778821164,Roysambu,user,2026-05-16 11:00:00,working_parent
+119,Nasimiyu Nzioka,user119@example.com,$2b$12$wb4Z2qpuwnHaSJToLgJykTOcemYD8v2VFtxOKtRz0L5KmZqSf0Ril,+254754252067,Embakasi,user,2026-04-02 16:00:00,toddler_development
+120,Mwikali Kamau,user120@example.com,$2b$12$TWjYmYuz4jMr3meeAQQpDplnAnl9CAVdMc9wnoFLFLW1Zr2yv6aki,+254770701238,South C,user,2026-04-13 17:00:00,maternal_wellbeing
+121,Kevin Odhiambo,user121@example.com,$2b$12$YG7akCC3IigA5U6Bp20iCQPEsQmua4W2zJX318VqofW8EPWzUoYVy,+254797751106,Kilimani,user,2026-04-25 11:00:00,early_pregnancy
+122,Eric Kariuki,user122@example.com,$2b$12$k4RERmS3NmpsLeGGolnroqUzFrGbMQbFAkYyiV0AeAWJxbki34K9C,+254793985065,Upper Hill,user,2026-04-20 16:00:00,birth_preparation
+123,Kevin Omondi,user123@example.com,$2b$12$Tqi9oL2IMwzToVV8p0aSW9uOZObZODE8aqeH9Bx0cjoGj5yU0Qz7w,+254755773264,Karen,user,2026-04-07 11:00:00,toddler_development
+124,Nyambura Nzioka,user124@example.com,$2b$12$WP8nl9ZG6HxTblcfrEuzEEfXc8NIhwyy9xw9sANACTUGE1kxIUcvR,+254725679375,Parklands,user,2026-05-03 12:00:00,infant_health
+125,Chebet Odhiambo,user125@example.com,$2b$12$wNViDuLdGVoluf0R8oMCJ12ZJmAlAPvFvmrBQAsPiZ2sY9W7VC5fB,+254774652344,Ruaka,user,2026-08-24 19:00:00,toddler_development
+126,Adhiambo Juma,user126@example.com,$2b$12$iVMtwV4YkGCrFi5PeRu2qrHw6Tvh1VkLSRkYjDUwqbRWqBOX9Z4Xp,+254735838665,Westlands,user,2026-03-20 16:00:00,working_parent
+127,Achieng Githinji,user127@example.com,$2b$12$pYcr8Y3M9TICGs3L2xIWjsUDxMCWvg8LRQaopuomFNDJ2ckNTXY14,+254723633399,Roysambu,user,2026-05-09 21:00:00,birth_preparation
+128,Mwikali Wafula,user128@example.com,$2b$12$1VUlaaJHrpOZSymbcAEmz2fis2jeJdvs7g223bWsje61FfexcvmPW,+254779522697,Westlands,user,2026-03-06 07:00:00,maternal_wellbeing
+129,Chebet Mwangi,user129@example.com,$2b$12$zmRtYF2UNYftwLsq3PqrbWOJa1pF9bTZTfUauPCoClHWvKoWLHZTd,+254779239203,Parklands,user,2026-03-26 20:00:00,new_mother
+130,Martin Otieno,user130@example.com,$2b$12$NG4sWgkmzv0s02OiHOWvzItEjcVfTXfLUjiwREgok1zsw9i45AsEL,+254797819520,Roysambu,user,2026-03-28 15:00:00,infant_health
+131,Mwikali Mwangi,user131@example.com,$2b$12$TQgGil0nTCvLukrfTkDRWZg5JuQrNAghtgW7VZzzZdmBBt61k3KVw,+254772005460,Runda,user,2026-04-13 09:00:00,toddler_development
+132,Wangari Nzioka,user132@example.com,$2b$12$xNOonLe4uoqzfzX0WWDJuWEXHZNiA9Fio7fXwWTxFBP1t0sbdfWrf,+254745257602,Langata,user,2026-03-20 21:00:00,infant_health
+133,Muthoni Kamau,user133@example.com,$2b$12$yBAAOtc0ywWUOw2tFQi5ZaM8xd0wWVhHHfJJeKLVKlAa3nbcFT5h8,+254788669153,Langata,user,2026-03-23 20:00:00,toddler_development
+134,Chebet Maina,user134@example.com,$2b$12$TfsTAfG9hezVqSNd5kicEGVFFnXrHMyiQP1cBQMa1WD8ydolBlq2C,+254795441081,Ruaka,user,2026-03-12 19:00:00,working_parent
+135,Chebet Njoroge,user135@example.com,$2b$12$XRoaKRp2j74Azp5HXj8tw4KRYbIHGYN8X2qdOX5Dv6yio7HbrAo7C,+254766204611,Runda,user,2026-04-20 16:00:00,toddler_development
+136,Nyambura Juma,user136@example.com,$2b$12$HqJ7U078bizHbEpcQZyEQndgZkGODQsna50rIhvTmI2XS1cIlBfmN,+254749734558,Buruburu,user,2026-05-20 16:00:00,infant_health
+137,Wangari Mwangi,user137@example.com,$2b$12$XPZQ5n0F15DYgsMAo2lgL6a1eMPT9fcXjzFzPLt2COPM0vLzaQHm8,+254773186865,Ruaka,user,2026-03-14 10:00:00,birth_preparation
+138,Dennis Rotich,user138@example.com,$2b$12$Kze7xoHkRJLa2EQWVM86zDr5nJAjJl0PHSy6oM1JBtNqGD0jLYmdN,+254753002344,Upper Hill,user,2026-04-25 19:00:00,infant_health
+139,Collins Juma,user139@example.com,$2b$12$8Addgczxttd16Z7IiOWQqkYrsfHCROhkzpUPvGtKdipVNLj75tGdT,+254748182062,Roysambu,user,2026-05-04 18:00:00,new_mother
+140,Njeri Juma,user140@example.com,$2b$12$QQsLDijL8wOFzbhrXnjID5AoAr1rnegxMH6B5Dzeuk9ykfw2ThGQk,+254782899799,Westlands,user,2026-05-30 16:00:00,early_pregnancy
+141,Brian Odhiambo,user141@example.com,$2b$12$oJm6jE1AZvuocvgSxlLSPTCB9XT4M1SYIpmSMme5dk6vRg7Ctwntt,+254797298613,South B,user,2026-03-09 10:00:00,early_pregnancy
+142,Dennis Omondi,user142@example.com,$2b$12$beFZh9VcSSYkBlrrO7fPy9IMf2fmMEUkL14GIa9jnIn8wpt3PNGlo,+254772819748,Roysambu,user,2026-05-07 09:00:00,maternal_wellbeing
+143,Muthoni Mwangi,user143@example.com,$2b$12$5hZkTAkaKPDAhGEuDB9SQLsYLFj5Tgpc1OEQw3O5JvlCfYcyfjUc7,+254787111275,Roysambu,user,2026-04-08 19:00:00,working_parent
+144,Dennis Kiprop,user144@example.com,$2b$12$NGHWCmhVHz1zsQzcMszHO2HgVoeWVLIGIyN4Cxx3lWZzcLYhkK3mP,+254728507847,Buruburu,user,2026-04-06 18:00:00,birth_preparation
+145,Akinyi Njoroge,user145@example.com,$2b$12$quMzWFezj84n8wcLDqLdEJ3UDEgvZvzV07uxfV66r0BLGz2m7QCvE,+254751094606,Kileleshwa,user,2026-04-17 20:00:00,birth_preparation
+146,Kevin Njoroge,user146@example.com,$2b$12$KDPQHbu2h6ZhowxuPGP3UKYEumCHYYRFYmW7SCQiqGeouTFyseDc7,+254773077049,Ruaka,user,2026-04-16 08:00:00,maternal_wellbeing
+147,Felix Juma,user147@example.com,$2b$12$77GapT7doqUal7OvFeOomFnzvARhTH4bTACSMDHSNe35WQPiYLPMM,+254726360011,Ngong Road,user,2026-04-18 15:00:00,new_mother
+148,Jepkosgei Kiprop,user148@example.com,$2b$12$AJnaUvSSpwlZI4txHW3HsgUn4NKORgMFlB6um3my88ocVvzpkT540,+254799243237,Embakasi,user,2026-03-22 11:00:00,working_parent
+149,Felix Nzioka,user149@example.com,$2b$12$ZBhYW4TE4xHs81PMiUVBOEIXZIcmiZu8evwljnbNZDCwQqdFrjtWr,+254790687121,Karen,user,2026-04-05 15:00:00,early_pregnancy
+150,Dennis Juma,user150@example.com,$2b$12$R86S6Xc5ZoR2yaTHYO0C8N0ENn2KYxdl290tUH3yWMLpfDwsCKiOk,+254740312291,Kikuyu,user,2026-03-09 11:00:00,early_pregnancy
+151,Adhiambo Githinji,user151@example.com,$2b$12$BVScRl0ZUooPckVznS9K5G5C3dEk8rtIpRcL0k5IUYmSe0Gavcq0d,+254726742870,Kasarani,user,2026-06-12 08:00:00,toddler_development
+152,Achieng Chelimo,user152@example.com,$2b$12$YOxspZzB5bYlZ3J1Zap4389IXGUs827XtaHCxG3UjXbs4uAixgOwP,+254718378986,Runda,user,2026-05-17 16:00:00,early_pregnancy
+153,Njeri Nzioka,user153@example.com,$2b$12$WPPV11i27eVhCzNHPuY4pI6SmmoLGIdsZfIxFMRAwIxlsGF3H3bOw,+254756202456,Gigiri,user,2026-03-16 15:00:00,new_mother
+154,Joseph Kamau,user154@example.com,$2b$12$lIlLue5253caY2n5ZxlXNmv2tVw1roxdoSUVyqjtlem3Ecu86xu6r,+254758406384,Langata,user,2026-05-11 10:00:00,early_pregnancy
+155,Eric Otieno,user155@example.com,$2b$12$A0tJQYjjuxYjMXX6xPvRNaa0JU0DKrULvekKBHPOkYTAUK1h0l9Ps,+254763951030,Kasarani,user,2026-04-28 20:00:00,early_pregnancy
+156,Adhiambo Nzioka,user156@example.com,$2b$12$BW27Mx5bX4q0p1B19801iWTdywQMhvDMaPxZ6nJ0EzNARcmf3vS3f,+254730946927,Buruburu,user,2026-05-11 20:00:00,early_pregnancy
+157,Brian Chelimo,user157@example.com,$2b$12$NjlyHh3nmpRjuEqEJ5efDbDWjtyzuzCVQRtw4HxQfI0skGf0cI9Mb,+254735483320,South B,user,2026-03-10 12:00:00,new_mother
+158,Collins Otieno,user158@example.com,$2b$12$svwx5jaSGlyqdXK5bwPk0Suybo3G1j2KCXH67PRHkniQezP7Xi3v3,+254715832259,Parklands,user,2026-04-17 16:00:00,infant_health
+159,Wangari Wafula,user159@example.com,$2b$12$m1PgCrOGmSFjEVgB6gddJQZQllB1YSbuMZAABaQIl11n2aoCQsnch,+254790514960,Parklands,user,2026-07-08 17:00:00,maternal_wellbeing
+160,Achieng Omondi,user160@example.com,$2b$12$yKPEX05e5vVoyuGTDS9yWdM5FWhsD9RAdkPDjBgSMvJbiAtagFezC,+254714093158,Roysambu,user,2026-05-28 12:00:00,birth_preparation
+161,Dennis Njoroge,user161@example.com,$2b$12$M9KF0CJPzUYS51jTWndEziBVr0FldPLu1K4DKzNAFm8BhFSEAiYVh,+254734976903,Upper Hill,user,2026-03-18 13:00:00,new_mother
+162,Jepkosgei Ochieng,user162@example.com,$2b$12$9SRIOYoMlJnLheuEJnIC6aWOaWmS12se67XMdw9qpj0ytSpzshlKV,+254794349128,Langata,user,2026-04-03 19:00:00,new_mother
+163,Wairimu Maina,user163@example.com,$2b$12$MVKoIU72pfOW0cbzfUx1nTdIYJbIS4NuZ3hAt6GXSO2AGO4KPC21b,+254761608904,Donholm,user,2026-03-29 20:00:00,birth_preparation
+164,Kevin Barasa,user164@example.com,$2b$12$DGNbcQ1syf3viXyle8NAyUatH6CiKN1QWHtm2vTqofpa8yRrsHfJE,+254729450992,Ruaka,user,2026-03-28 20:00:00,early_pregnancy
+165,Joseph Barasa,user165@example.com,$2b$12$iRewWKVLrag0FjIodYsPm2NUyZgJc9Jb43Asgd4VqBW54GS7wdEBO,+254738854346,Ruaka,user,2026-05-26 18:00:00,infant_health
+166,Joseph Kamau,user166@example.com,$2b$12$FbxcXMxAtBNmNYH5FxxfmFWADmFctFAJg8M0Gaj4RLcukjBezPbbL,+254716137886,Ngong Road,user,2026-08-02 16:00:00,working_parent
+167,Kanini Otieno,user167@example.com,$2b$12$1fC4JoqXFZOWN6rFOXyTuPw2OCNeygJ5Eq4zfvT9urd2toJfHnUEZ,+254788309654,South B,user,2026-04-17 16:00:00,early_pregnancy
+168,Felix Mwangi,user168@example.com,$2b$12$f8gp17Bo9cs5XS8zVOttu4oH6gINqTwdJY6cbywVLTlN9LFc3ys2K,+254748913149,Kilimani,user,2026-04-11 19:00:00,early_pregnancy
+169,Nyambura Barasa,user169@example.com,$2b$12$epo902711Ya7OdDyM3hoXy9e35FBu2Wj5Af7ZGSWS21Bcn5xMkD34,+254771225273,Kileleshwa,user,2026-03-28 08:00:00,birth_preparation
+170,Njeri Kilonzo,user170@example.com,$2b$12$GofeFdUoobs2FDWQFP5rhXrzXIXDrcwzGKKaqqQ3FqFLWq3BNmfqA,+254775073576,Runda,user,2026-06-17 12:00:00,birth_preparation
+171,Achieng Rotich,user171@example.com,$2b$12$Ud27oM5Qy8YIm4V96sVIbscxVa0GQz6OuSp2rYVxiBHcWMgEobMvZ,+254769608124,South B,user,2026-05-22 10:00:00,infant_health
+172,Martin Kariuki,user172@example.com,$2b$12$92qWSAInt9cTzBoZQ8I4PLJE3FYM2MJgdVhvbMxS3l9Dx1G6k58Fw,+254764582830,Langata,user,2026-04-30 14:00:00,toddler_development
+173,Mwikali Njoroge,user173@example.com,$2b$12$nkapRSzGng08yzVuLJ36gckXfWkDx5fpEc2Py17xiYkqkCV96CRFF,+254766280515,Upper Hill,user,2026-03-25 09:00:00,new_mother
+174,Atieno Kiprop,user174@example.com,$2b$12$ANI9mzqcj8kzVAs9MNRPPc4l5LrtVslcm7poTwNpEeADr1sDict34,+254790959884,South C,user,2026-06-06 17:00:00,birth_preparation
+175,Jepkosgei Maina,user175@example.com,$2b$12$aZBhWGBNnxHD0BHsK8Re6K0ZufTgTqP3E3rBFxpArtl8RHfRNm7lJ,+254754003125,Embakasi,user,2026-03-29 20:00:00,maternal_wellbeing
+176,Wairimu Kiprop,user176@example.com,$2b$12$pIOJ0DtmWOvhVezRPeYxg3iOcpAPxaqorh4faaEnepEusx0AbhjL4,+254720187284,Runda,user,2026-05-12 13:00:00,infant_health
+177,Chebet Mwangi,user177@example.com,$2b$12$g2UMsjwPXHwm66FmzutJ7iikITF3ZAXILZ2r6skoxvmiluYXmbmgP,+254717365061,Kikuyu,user,2026-04-18 11:00:00,working_parent
+178,Kanini Omondi,user178@example.com,$2b$12$OyJlvmkVuWRPEqyh6brIcNxnozLcd4oXMXZYYPbcCPo2c2MKc8aoW,+254774516998,Kileleshwa,user,2026-04-27 14:00:00,early_pregnancy
+179,Njeri Chelimo,user179@example.com,$2b$12$acoGmPDTHLU9PkwZcy0epxe4hEUjQA0X7MJ9lyPAE7qcXLwn49tFf,+254719605226,Karen,user,2026-05-18 10:00:00,toddler_development
+180,Wairimu Chelimo,user180@example.com,$2b$12$tAiOcxl0ctaBXME7dmys6iRZwFIQsUKjvMBmukx0jzSubfM9Jv9u0,+254712196517,Donholm,user,2026-03-07 21:00:00,infant_health
+181,Victor Mwangi,user181@example.com,$2b$12$rZffqeubpewy3tjOf9bSzenj6tgNfX3TFvu5FOeZmbZ2s9J5CR8zQ,+254714508616,Buruburu,user,2026-03-12 12:00:00,infant_health
+182,Mwikali Kiprop,user182@example.com,$2b$12$dheIC5D2fsllVTPXIn8woWeLUCswDt6r3QwUqDN6xBQ1bUa47KSNb,+254760208528,Kasarani,user,2026-04-11 19:00:00,toddler_development
+183,Wangari Kilonzo,user183@example.com,$2b$12$YxdUFBZoCNCyCvB5PGdL3FwQjQyMf3dQsET2ebGGOjz9jKE55ZvtW,+254791476215,Kilimani,user,2026-04-20 07:00:00,infant_health
+184,Anyango Githinji,user184@example.com,$2b$12$cm7hbbQeLJVkmf9MKcyx9inYWAIFFAlM8Br74I0vQVu4O2SdcwpqB,+254734655444,Ngong Road,user,2026-04-26 07:00:00,early_pregnancy
+185,Atieno Nzioka,user185@example.com,$2b$12$xupkUPMyIXUIht1F2H7R069yUh0KAx9AsCYhZXyHaii9by3MQLFx6,+254713553229,Gigiri,user,2026-04-05 17:00:00,maternal_wellbeing
+186,Anyango Mutiso,user186@example.com,$2b$12$wpVtvqqae5gq8S210cJwyLEiX4Ydvwz36ZPQ9YSRH799K4MxRN1U9,+254721706820,Kileleshwa,user,2026-04-23 10:00:00,birth_preparation
+187,Victor Kiprop,user187@example.com,$2b$12$QkxRneA23SrRiUHc9kz5mREYYXSaRTXFhrjnysHHjUrQtfrlwypuK,+254777565858,Kilimani,user,2026-05-16 14:00:00,early_pregnancy
+188,Kevin Maina,user188@example.com,$2b$12$YSMmQtoe6eSO6g41TMfb04CFE3AZ9V0Vgv5yIf9ln4QMILBQEZ0qy,+254794896137,Westlands,user,2026-04-10 11:00:00,working_parent
+189,Joseph Kamau,user189@example.com,$2b$12$M3YrR0fySDCEGf0nbAeBgiMjHzuzBgnbG7mkghstsl8AsXUPMX4rc,+254760163368,Lavington,user,2026-04-03 16:00:00,early_pregnancy
+190,Kagure Kamau,user190@example.com,$2b$12$m3jcVfHMN0hhNgeAqAQagonj6eeENjw7RZnam6TrNzZKDWhzs8pQ2,+254716128036,Westlands,user,2026-04-02 10:00:00,maternal_wellbeing
+191,Njeri Barasa,user191@example.com,$2b$12$8KU6a2YT3rAcXetTlZnp9E87qOZ6xOFS5f2tKqmKIaB2JzZckuTM9,+254713677666,Ruaka,user,2026-03-13 14:00:00,maternal_wellbeing
+192,Syokau Were,user192@example.com,$2b$12$SAQKm7WK2A4HZnlT88wWfgO66SGyCXl9gY2CNeRBiMAEHLAYOHOHb,+254778407235,Westlands,user,2026-03-21 14:00:00,early_pregnancy
+193,Muthoni Juma,user193@example.com,$2b$12$s9hPNkXSve1o39rj1K7SeALRvKnP2AT67QYB4r8WW1nYKGZbNJyHh,+254733472569,Lavington,user,2026-05-21 16:00:00,early_pregnancy
+194,Akinyi Kamau,user194@example.com,$2b$12$nrHsoOngHmBcYWMkqEpKBBxNu1W6Gs8BtGTdfEZUvEFtWunwGoFtx,+254729418106,South C,user,2026-05-07 07:00:00,infant_health
+195,Achieng Kiprop,user195@example.com,$2b$12$rhcmsqPN38Ke6z0526ISfmVgG1jyl9vTX3jy08zsNLTfUXUdk72nK,+254761180272,Embakasi,user,2026-03-09 17:00:00,birth_preparation
+196,Chepkoech Omondi,user196@example.com,$2b$12$i2yGYsVMe2YGMVLRQqN8uKNySnPzyn11vUGLu8DFjJg2KrnjHcII7,+254770668570,Runda,user,2026-04-15 10:00:00,birth_preparation
+197,Felix Chelimo,user197@example.com,$2b$12$gXv6weTiFYXEkMdCR0EL7t8qEgdQ0T3Dq838LeX6A5l5GU58vcnxZ,+254767542966,Donholm,user,2026-05-05 07:00:00,toddler_development
+198,Wanjiru Kilonzo,user198@example.com,$2b$12$nmc5w4GPWn6e7tJ7FGjb9B502t3mIoD5DgZbb5Hkv8JYH8teCO5mg,+254714792683,South C,user,2026-03-19 20:00:00,special_needs
+199,Anyango Nzioka,user199@example.com,$2b$12$6vsJZyZEVJ2hPGBLYBkyccWoMeY9qILXT7kOJo0WJdtyeXGdmBdpy,+254757197183,Lavington,user,2026-06-04 12:00:00,working_parent
+200,Achieng Wafula,user200@example.com,$2b$12$PhBFrP4NCU1C3W2OcUECtHAm3ilGuy1E5CX7MEuqOoMU1xPOHS8O5,+254732396544,Kilimani,user,2026-03-21 17:00:00,toddler_development
+201,Kanini Barasa,user201@example.com,$2b$12$bkKEvwAcgsqS0kZ5wVYNlo1bnDamv8chIu9wCyDRD8o2eUQKWrVRF,+254755403708,Roysambu,user,2026-06-06 15:00:00,infant_health
+202,Syokau Kilonzo,user202@example.com,$2b$12$4SosfLXp4Ej2IcNM1ddBnAMxPYhg64PdApmd1IuLm2bveDm8fnhN1,+254759087141,Lavington,user,2026-03-24 19:00:00,birth_preparation
+203,Felix Otieno,user203@example.com,$2b$12$eP8jdBDN6hGHKaHQogygtEwVPSdAycdAT8JZ6zAUHkaEydHV6RmRf,+254771062425,Donholm,user,2026-03-18 18:00:00,toddler_development
+204,Wangari Maina,user204@example.com,$2b$12$lMlpcEiVPGnAKzRjRHnWIH2GWePsPJsKlgn1zCQhJSgV2Hz3CQZt4,+254770612631,Kikuyu,user,2026-05-03 17:00:00,birth_preparation
+205,Joseph Odhiambo,user205@example.com,$2b$12$RHfL3QQSigFXSum5VCvYwA7yKpgG3N5wocCK6EDR8RVY8UdzSsBnu,+254774036704,Upper Hill,user,2026-04-05 10:00:00,special_needs
+206,Mwikali Rotich,user206@example.com,$2b$12$5EedZAqHT2As5iMfHYoY2bzkDNvNISpjzAK5l84FxVdZDjXvBplZ7,+254727048976,Runda,user,2026-04-13 10:00:00,early_pregnancy
+207,Nasimiyu Maina,user207@example.com,$2b$12$pymlpIGWumfg394Kh4cSFqVUQbrEKgG8jGf2DZGPJEfmS2peqbzwW,+254790093472,Kikuyu,user,2026-04-15 20:00:00,working_parent
+208,Mwikali Ochieng,user208@example.com,$2b$12$nKHkOgpgpC8oGm5wJmH2cMfAVOS3tdYkQ94XFsoKU1cOe8QFppmYV,+254783185461,Upper Hill,user,2026-04-15 21:00:00,early_pregnancy
+209,Brian Juma,user209@example.com,$2b$12$QLa9JJnSbJNIN6EUtZ4gCNWR5ss7WLlbbDA3eht5Bh0lzP8Ip3ItJ,+254736273488,South B,user,2026-03-17 07:00:00,maternal_wellbeing
+210,Collins Ochieng,user210@example.com,$2b$12$OW0uVuXgDmMTVW4Gfhm7CEwe0shtOMWewsXY9ukzHrqXDMpVSRqt7,+254771291315,Roysambu,user,2026-04-29 13:00:00,new_mother
+211,Chepkoech Wafula,user211@example.com,$2b$12$WKBK3EAmogly5Lw7X5g1sfsGUgpvwlqXb2Jw5C5M7taqgFec0zAog,+254722908205,Lavington,user,2026-05-23 17:00:00,new_mother
+212,Eric Kilonzo,user212@example.com,$2b$12$SIqm59BK7zxIIxJUIa8TuTnoSEnmZEv0DSu9LSewOGbVEfgC3jTAY,+254735542433,Kikuyu,user,2026-03-24 10:00:00,toddler_development
+213,Achieng Nzioka,user213@example.com,$2b$12$pYFNtcZEsnBRCE3fn0rdLpE3C1LrY9qnLC1oQZ7b6bnT3iiFXmDIl,+254728525671,Karen,user,2026-03-16 19:00:00,early_pregnancy
+214,Victor Kiprop,user214@example.com,$2b$12$aXzvNtWlO6Tt0MQQmlERQd1twDgyCi3OytCMCiodk85SsxrpVtQHP,+254776752480,Embakasi,user,2026-03-31 15:00:00,working_parent
+215,Akinyi Mwangi,user215@example.com,$2b$12$Fcl5DGhwhmL0zRPrqD1nhquBXEUxhSmsSK8dzOsjbNZElerdA4R6E,+254743172987,Embakasi,user,2026-06-06 15:00:00,maternal_wellbeing
+216,Muthoni Maina,user216@example.com,$2b$12$0dFBhdN3sLWCIL5WcexCYZofR5mBNld9E7ycIHgw8cZYFTHcbojrp,+254734764098,South B,user,2026-03-28 19:00:00,infant_health
+217,Eric Juma,user217@example.com,$2b$12$Nx9oZDdw4Wr2h4qDnrPOUOR4jnfYs8mtIp3im0Dq0erTUnevKAtTB,+254769570831,Kilimani,user,2026-03-28 10:00:00,infant_health
+218,Wambui Githinji,user218@example.com,$2b$12$rARlGTncnXWg8gQSaOTHYfe5oqwQFzrwu8DxZqTUSiOuUYgh4ohDN,+254713986723,Buruburu,user,2026-05-03 19:00:00,maternal_wellbeing
+219,Victor Were,user219@example.com,$2b$12$oJvkJwZz2Vln6yCyV3MB84Q4BmDCpfBqahDdQtzgIkvqNuYEWH4Kh,+254769026578,Westlands,user,2026-06-23 13:00:00,new_mother
+220,Syokau Nzioka,user220@example.com,$2b$12$p4NP2JngcvO8Oc1f7bkfPqp4byyMLYVmM58Q9Mr4tDwyfVR85NHQh,+254713416224,South B,user,2026-05-26 14:00:00,infant_health
+221,Samuel Barasa,user221@example.com,$2b$12$jXPLV7DG68Htk2ekdlIrPjMCBtC522ApAiiUiQ1kRCWH6iMbtPQbg,+254724912089,Lavington,user,2026-04-28 10:00:00,maternal_wellbeing
+222,Wairimu Nzioka,user222@example.com,$2b$12$J3VAkWO1y7iD05GkTQdrTst1lWwDxhnBtNbjUn4OKLpI6AVqIMW8A,+254746441403,Ruaka,user,2026-05-08 13:00:00,birth_preparation
+223,Kagure Omondi,user223@example.com,$2b$12$pvvvKAVFIGkHsthCGHdeGd6iR7WLBfkArOpSLT7CXwl67sfrqqNhP,+254787287525,Donholm,user,2026-03-06 17:00:00,special_needs
+224,Wangari Kilonzo,user224@example.com,$2b$12$CXprb5u88qhweR4lZwiSfJusqfOTulfBCeVZtO8XRkJCCfksFI7br,+254757269182,Kikuyu,user,2026-03-20 07:00:00,working_parent
+225,Nyambura Mutiso,user225@example.com,$2b$12$2KVGMNJKlTjrh3XvWJnCnQTsHbsdAMg76tPTSzN0Fx453gphsteZJ,+254746526291,Kikuyu,user,2026-04-30 18:00:00,early_pregnancy
+226,Wairimu Kamau,user226@example.com,$2b$12$lDQ1qZy6i0MWmlP9P120YJMU3TVP6ZcO2QZ2TjEiNuFEqV60vQBY5,+254774858157,South C,user,2026-04-19 07:00:00,early_pregnancy
+227,Dennis Kamau,user227@example.com,$2b$12$7KmqZHBecARkczezJ8T1JiNyC1YsXy5xgPNOKddWGT9Z8nsTAJnKq,+254768040007,Ruaka,user,2026-04-02 12:00:00,birth_preparation
+228,Muthoni Juma,user228@example.com,$2b$12$RDVkBba6VFXPpbTdWMDjsUGWoBc7UAZ6xkc23vjsnPObxJneX1RnG,+254719321428,Kileleshwa,user,2026-03-24 09:00:00,early_pregnancy
+229,Felix Mwangi,user229@example.com,$2b$12$9lFLSC8RSEhHMH2gKI4Ghsh1abi6CIDpLI3S6Gt90bFY0atGGYQhp,+254725732012,Roysambu,user,2026-04-26 13:00:00,early_pregnancy
+230,Achieng Odhiambo,user230@example.com,$2b$12$DG1L1dlmIPERsjeoaQDPsvBeirof3RoxxHSLu5ZIWvyhSaytND8x7,+254751324791,Donholm,user,2026-04-13 19:00:00,special_needs
+231,Nasimiyu Were,user231@example.com,$2b$12$WAuS31Cyy5SIlcX6pVEcee9iiUvs43hNlTwBO1HvFydZefYLSsyVH,+254748351204,Roysambu,user,2026-04-29 12:00:00,birth_preparation
+232,Muthoni Kilonzo,user232@example.com,$2b$12$CY0d2hE1jBisKEOfejsjLPoEVSNJoPdZOlUWOgGibdKIRNlT86lnL,+254777968269,Ruaka,user,2026-05-18 14:00:00,toddler_development
+233,Chepkoech Mutiso,user233@example.com,$2b$12$a3GL70gswt6SkLOABfem6jruNPZCHuDchPcKCXGL0YunNCa2VnuyT,+254751862743,Kileleshwa,user,2026-04-12 10:00:00,birth_preparation
+234,Syokau Omondi,user234@example.com,$2b$12$PMQvaSBKNjlG1Sq9bX0aYBfvaB8quM5D1kl9mNPRY6QSNxAqViB13,+254797812740,Westlands,user,2026-03-22 08:00:00,new_mother
+235,Wambui Chelimo,user235@example.com,$2b$12$bNJFTPtGr4NkzUz6YN6G8RDOBeRdmREcfKZpBivArAIHaz9hrjcyr,+254730435392,Embakasi,user,2026-08-21 13:00:00,special_needs
+236,Dennis Mwangi,user236@example.com,$2b$12$mCEElSBtnjig9SqJG4juPBan3KDUiIp8TTXyfcohjRgy8VV1xYSFH,+254727019113,Roysambu,user,2026-06-13 09:00:00,early_pregnancy
+237,Akinyi Kariuki,user237@example.com,$2b$12$RQKyS8TzX7XJZ83QutntKRqF7QfSxHGfCcfoyZyPrUXMWPw2uhXiF,+254764926716,Roysambu,user,2026-04-16 14:00:00,working_parent
+238,Adhiambo Njoroge,user238@example.com,$2b$12$TLjvni45e24If6d6xYoBEMDAYQYTn3DWGWdoDTaey1aRVPKifTHy4,+254746381951,Upper Hill,user,2026-03-19 13:00:00,birth_preparation
+239,Jepkosgei Mutiso,user239@example.com,$2b$12$TUaoFikmxsEEwTwpwNotnwxieg2ls7ivnzFrXqsLTP4PiiiYkilAU,+254774929213,South B,user,2026-03-20 13:00:00,maternal_wellbeing
+240,Collins Kamau,user240@example.com,$2b$12$durL5AKugvqVCdqUaaWKhQC9GHPQ8NJ51mQa0tZIoOHnv0Gu2raE9,+254772983471,Buruburu,user,2026-05-28 08:00:00,early_pregnancy
+241,Admin 1,admin1@mzazicare.example,$2b$12$130f2a81c59750a9ab1b81ba2fc5077b42b05b290e4c398e5a2b6,+254724897310,Westlands,admin,2026-01-31 00:00:00,
+242,Admin 2,admin2@mzazicare.example,$2b$12$588ea5aac9c064bfcf42896e97a90e8f884250b508fda1ec0902c,+254750548857,Westlands,admin,2026-01-31 00:00:00,
+243,Admin 3,admin3@mzazicare.example,$2b$12$e52c36d5aace9ab28311ef9f9da074dfff5f9b65e11d6ba40f123,+254722351098,Westlands,admin,2026-01-31 00:00:00,

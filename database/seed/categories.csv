@@ -1,0 +1,25 @@
+category_id,category_name,description,parent_category_id
+1,Pregnancy and Birth,"Services supporting women through pregnancy, labour and delivery",
+2,Postnatal and Maternal Wellness,"Services supporting mothers after birth, physically and emotionally",
+3,Child Health and Development,Clinical and developmental services for infants and young children,
+4,Childcare and Family Support,Care arrangements and guidance for families raising young children,
+5,Prenatal Care,Routine clinical monitoring and check-ups during pregnancy,1
+6,Antenatal Classes,Group and private classes preparing parents for labour and newborn care,1
+7,Obstetric Consultation,Specialist obstetric and gynaecological consultation and high-risk pregnancy care,1
+8,Midwifery Services,"Midwife-led pregnancy, labour and delivery support",1
+9,Birth Doula Support,"Continuous non-clinical support before, during and shortly after birth",1
+10,Postnatal Support,Follow-up care and recovery support for mothers after delivery,2
+11,Postnatal Home Care,In-home nursing and practical help for mothers and newborns,2
+12,Lactation Consultation,"Specialist help with breastfeeding, latch and milk supply",2
+13,Breastfeeding Support Groups,Peer-led groups and clinics for breastfeeding mothers,2
+14,Maternal Mental Health,Counselling and therapy for perinatal and postnatal emotional wellbeing,2
+15,Maternal Nutrition,Dietary assessment and meal planning for pregnancy and breastfeeding,2
+16,Prenatal and Postnatal Fitness,Safe guided exercise before and after birth,2
+17,Pediatric Care,General clinical care for infants and young children,3
+18,Child Immunisation,Routine and catch-up vaccination services for children,3
+19,Child Nutrition and Feeding,"Weaning, complementary feeding and child dietary guidance",3
+20,Early Childhood Development,"Developmental stimulation, milestones and school readiness",3
+21,Child Special Needs Support,Therapy and support for children with developmental or sensory needs,3
+22,Nanny Placement,Vetting and placement of household nannies and caregivers,4
+23,Daycare and Childcare Centres,Registered day care and crèche facilities for young children,4
+24,Parenting Guidance and Coaching,"Coaching and classes on parenting skills, sleep and behaviour",4
