@@ -6,9 +6,13 @@
  * both the MySQL data layer and the Python recommendation layer, and serves the
  * static front end.
  */
-require('dotenv').config();
-
 const path = require('path');
+
+// backend/.env wins; the project-root .env (shared with docker compose and
+// the ML service) fills in anything it does not set.
+require('dotenv').config();
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -28,7 +32,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'"],
     },
   },
@@ -74,11 +78,17 @@ app.get('*', (_req, res) => res.sendFile(path.join(FRONTEND, 'index.html')));
 app.use(errorHandler);
 
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Mzazi Care API listening on http://localhost:${PORT}`);
-    console.log(`  recommendation service: ${process.env.ML_SERVICE_URL || 'http://localhost:8000'}`);
-    console.log(`  front end: ${FRONTEND}`);
-  });
+  // Bring an older database up to date before serving; failure is reported,
+  // not fatal, so a read-only database user can still run the site.
+  require('./config/migrate').migrate()
+    .catch((err) => console.warn('[migrate] skipped:', err.message))
+    .finally(() => {
+      app.listen(PORT, () => {
+        console.log(`Mzazi Care API listening on http://localhost:${PORT}`);
+        console.log(`  recommendation service: ${process.env.ML_SERVICE_URL || 'http://localhost:8000'}`);
+        console.log(`  front end: ${FRONTEND}`);
+      });
+    });
 }
 
 module.exports = app;

@@ -30,8 +30,8 @@ frontend/
 ├── index.html      landing + search entry point
 ├── search.html     results + filters + recommendation panel
 ├── provider.html   single provider profile
-├── account.html    login / register / shortlist / preferences
-├── admin.html      dashboard, verification queue, listing form, audit log
+├── account.html    login / register / saved / preferences / profile / history / password
+├── admin.html      dashboard, queue, listings, form + evidence, categories, users, reports, log
 ├── css/styles.css  the entire design system, one file
 └── js/
     ├── api.js       fetch wrapper + auth token storage
@@ -54,24 +54,32 @@ that root element. `search.html` and `admin.html` hard-code more structure
 (filter form, tab bar) because those elements exist before any data loads.
 
 - **`index.html`** — hero search bar (free-text `q`, `category`, `location`),
-  a `#home-recs` panel that only appears for signed-in users, and a category
-  grid built from `GET /api/categories`.
+  a `#home-recs` panel (recommendations when signed in, an invitation to sign
+  in otherwise), and categories grouped by service type from `GET /api/categories`.
 - **`search.html`** — a three-column layout on desktop
   (`.layout.search-layout` → 230px filters / results / 280px recommendations,
   collapsing to a single column under 960px, with the recommendation panel
-  reordered above the results via `order: -1`). Filters, sort, and pagination
-  all round-trip through the URL query string so results are shareable and
-  survive a reload.
-- **`provider.html`** — renders into `#provider-root`: description,
-  qualifications, tag chips, a save/shortlist button, a star-rating select,
-  and a "similar services" panel from `GET /similar/{id}`.
+  reordered above the results via `order`, and the filter panel collapsed
+  behind a "Filters" button — Figure 4.15). Filters are service type (the top
+  level of the category tree), category, location and sort; together with the
+  query and page they round-trip through the URL so results are shareable.
+  A "Recently viewed" panel appears for signed-in users, and a zero-result
+  search shows the engine's closest services instead of an empty page.
+- **`provider.html`** — renders into `#provider-root`: header with image (or
+  monogram), rating summary and tags; Overview / Qualifications / Services
+  offered / Location tabs; save, share and rate controls; and a "similar
+  services" panel from `GET /similar/{id}`.
 - **`account.html`** — one controller, two modes: an auth form (login/register
-  tabs) when logged out, or the account view (profile, category preference
-  checkboxes, saved-services list) when logged in.
-- **`admin.html`** — a tab bar (`Dashboard`, `Pending verification`, `All
-  listings`, `Add listing`, `Activity log`) that swaps the contents of
-  `#admin-view`; `admin.js` guards the whole page client-side by checking
-  `user.role === 'admin'` (the real enforcement is server-side, see §2.2).
+  tabs) when logged out, or the account area with five sections (saved
+  services, preferences grouped by service type with a preferred location,
+  profile, search history, change password) when logged in. A new account
+  lands on preferences, because they seed the first recommendations.
+- **`admin.html`** — a tab bar (`Dashboard`, `Pending verification`,
+  `Provider listings`, `Add listing`, `Categories`, `Registered users`,
+  `Reports`, `Activity log`) that swaps the contents of `#admin-view`, plus a
+  `<dialog>` that collects the reason for a rejection. `admin.js` guards the
+  page client-side by checking `user.role === 'admin'`; the real enforcement
+  is server-side, see §2.
 
 ### 1.2 CSS — `css/styles.css`
 
@@ -163,13 +171,14 @@ real page loads between the five `.html` files.
   (profile + preferences + saved list), switching based on whether a token
   exists; on a `401` from `API.me()` it falls back to the auth form rather
   than erroring.
-- `admin.js` — a tiny hash-free router (`show(view)` swaps five view
-  functions in and out of `#admin-view`): `dashboard()` renders catalogue
-  stats plus the live model card from `GET /admin/stats` and wires the
-  "Re-index catalogue" / "Retrain model" buttons; `listings()` /
-  `pendingQueue()` list and act on providers (approve/reject/edit);
-  `providerForm()` is the shared create/edit form; `logs()` renders the
-  `admin_logs` audit trail.
+- `admin.js` — a small router (`show(view)`, mirrored in `?view=`):
+  `dashboard()` (stat tiles, the oldest five pending listings with inline
+  approve/reject, the model card, recent activity); `listings()` (search,
+  status and category filters, pagination, approve/reject/edit/delete);
+  `providerForm()` (create/edit, supporting evidence and profile image
+  uploads, verification status, the listing's history); `categoryAdmin()`;
+  `users()` (role changes); `reports()`; `logs()`. Rejecting always asks for a
+  reason (`askReason()`), which the API requires.
 
 ---
 
@@ -183,15 +192,20 @@ backend/
 │   ├── auth.js              bcrypt + JWT issue/verify, requireAuth/requireAdmin/optionalAuth
 │   ├── validate.js          turns express-validator errors into a 422
 │   └── errors.js            asyncRoute() wrapper + notFound/errorHandler
+├── config/migrate.js        idempotent schema upgrades, run on start
 ├── routes/
-│   ├── auth.js               register, login, me, preferences
+│   ├── auth.js               register, login, me, password, preferences, search history
 │   ├── categories.js         category tree + verified-provider counts
-│   ├── services.js           public catalogue search/detail/locations
+│   ├── services.js           public search/detail/locations/profile images
 │   ├── interactions.js       records the events the recommender trains on
 │   ├── saved.js               shortlist add/remove/list
 │   ├── recommendations.js    the ML client + SQL popularity fallback
-│   └── admin.js               CRUD, verification queue, reindex/retrain, logs
-└── services/mlClient.js      fetch() wrapper for the Python service
+│   └── admin.js               listings, verification, evidence, categories,
+│                              users, reports, reindex/retrain, logs
+└── services/
+    ├── mlClient.js           fetch() wrapper for the Python service
+    ├── catalog.js            keyword-search SQL, category tree, hydration
+    └── media.js              evidence and image storage, type-checked by content
 ```
 
 `server.js` is the composition root: it applies `helmet()` with an explicit
@@ -212,9 +226,20 @@ default 12); a session is a JWT signed with `JWT_SECRET` carrying
 `{ sub: user_id, role, name }`. `requireAuth` populates `req.user` or 401s;
 `optionalAuth` populates it if present but never rejects (used on
 `recommendations.js`, so an anonymous visitor still gets a response);
-`requireAdmin` 403s anyone whose `role !== 'admin'`. This is the actual
-enforcement behind the client-side check in `admin.js` — the frontend gate
-is only a UX convenience.
+`requireAdmin` re-reads the role from `users` on every request and 403s
+anyone who is not an administrator *now* — so a demotion takes effect at once,
+not when the token expires. This is the actual enforcement behind the
+client-side check in `admin.js`.
+
+**Search** (`services/catalog.js`): the query is lowercased, hyphens become
+spaces, spelling variants collapse (*day care* → *daycare*, mirroring
+`synonyms.py`), and filler words drop out. Every remaining term must match, by
+prefix, in the description, tags, name or category (a full-text BOOLEAN-mode
+match plus `LIKE`s); a variant also matches its spaced spelling as a phrase.
+Results are ordered by a NATURAL-LANGUAGE full-text score plus name and
+category bonuses. If nothing matches, the route asks the engine for the
+closest services (dropping the location filter) and returns them as
+`suggestions` (Figure 4.5).
 
 **`recommendations.js`** is the most interesting route: it doesn't rank
 anything itself. It builds a payload (`user_id` from `req.user` if present,
@@ -228,10 +253,14 @@ engine's bare `{provider_id, provider_name, category_id, ...}` results with
 ML service only knows what it indexed, not the full row.
 
 **`admin.js`** (routes) is the management surface: provider CRUD, the
-verification queue (`PUT /admin/providers/:id/verify`), and two ML controls
-— `POST /admin/model/reindex` and `POST /admin/model/retrain` — that simply
-proxy to the Python service's `/reindex` and `/retrain`. Every admin action
-is written to `admin_logs` (visible in `admin.js`'s "Activity log" tab).
+verification queue (`PUT /admin/providers/:id/verify` — a rejection must carry
+a reason, stored in `admin_logs.notes`), evidence and image uploads (raw
+bodies, type decided by the file's first bytes, stored under random names;
+evidence is downloadable only here), categories (two levels: service types
+and the categories under them; a category with providers or children cannot
+be deleted), users (role changes, never your own, never the last
+administrator), reports, and the two ML controls. Every mutation and its
+`admin_logs` row commit in one transaction (`config/db.js`'s `transaction()`).
 
 ---
 
@@ -247,10 +276,12 @@ ml-service/
 └── train.py     offline training/tuning/evaluation CLI
 ```
 
-This service is stateless between requests except for one in-process
-`HybridRecommender` held in memory (`_state["engine"]` in `app.py`) — it is
-trained once at startup (`lifespan`) and rebuilt on demand via `/reindex` or
-`/retrain`. It is never reached by the browser; every request carries
+This service holds one in-process `HybridRecommender` (`_state["engine"]` in
+`app.py`), trained at startup and rebuilt via `/reindex` or `/retrain`. At
+request time it reads the user's *live* history from MySQL (interactions,
+recent searches, declared preferences, saved services — `db.user_history()`,
+Figure 4.3 step 7), so a parent who registered a minute ago is personalised
+immediately rather than after the next retrain. It is never reached by the browser; every request carries
 `X-Service-Token`, checked against `ML_SERVICE_TOKEN` by `require_token()`.
 
 ### 3.1 The math
@@ -260,11 +291,12 @@ score(u, s) = α · content(u, s) + (1 − α) · collaborative(u, s)
 ```
 
 - **content(u, s)** — cosine similarity between a user's *preference vector*
-  (their interaction-weighted average of the content vectors of everything
-  they've engaged with — see `_content_scores` in `engine.py`) and each
-  provider's content vector. If there's a live search query, it's blended in
-  and *weighted more than the stored profile* (`query_weight = 0.75`), so
-  what someone is searching for right now dominates their long-term history.
+  and each provider's content vector. The preference vector (Section 4.8.1,
+  `_build_profile`) sums the vectors of the services they viewed, clicked,
+  saved and rated (weighted by action), their 20 most recent searches, and
+  the centroids of the categories they declared. A live search query is
+  blended in and *weighted more than the stored profile* (`query_weight =
+  0.75`).
 - **collaborative(u, s)** — k-Nearest-Neighbours over the sparse user-item
   interaction matrix (cosine metric, `algorithm="brute"`, `k=20` by
   default). A user's score for provider *s* is the interaction-weighted sum
@@ -278,13 +310,19 @@ worth 1.0, a `click` 2.0, a `save` 3.5, a `rating` 4.0 — deliberately
 increasing with how deliberate the action is, since a rating is a much
 stronger signal of preference than a page view.
 
-**Cold-start rules**, applied in order (this is the part that makes the
-"hybrid" more than decoration):
+**α** (`MZAZI_ALPHA=auto`): 1 at launch; a density schedule while data is
+thin; once 20+ users have a held-out interaction, each retrain picks the α
+with the best held-out recall@10 (`review_alpha`). Re-index keeps α; retrain
+reviews it.
+
+**Cold-start rules**, applied in order (Table 4.3, alternative flow):
 1. If a user has fewer than `min_interactions` (default 3) interactions,
    there's no usable collaborative signal → `α` is forced to `1.0` (content
    only).
-2. If there's *also* no content signal (new user, no query, empty
-   preferences), the engine falls back to raw popularity
+2. If there's no content signal, or no candidate clears the similarity
+   threshold (0.25 for sentence embeddings, 0.10 for TF-IDF), the engine
+   returns popular, highly rated services — half popularity, half a
+   Bayesian-smoothed rating — within the selected category
    (`strategy: "popularity_fallback"`).
 3. A live search query always outweighs a stored preference vector, per the
    `query_weight` blend above.
@@ -297,11 +335,16 @@ spot — it only needs the listing's own text. That's why `admin.js`'s verify
 action triggers an immediate `/reindex` rather than waiting for the next
 scheduled retrain.
 
-**Diversity** (`_apply_diversity`, off by default via
-`diversity_slots=0`): reserves N slots in the top-N results for categories
-other than whatever dominates the ranked list, so a user who has only ever
-looked at pediatricians doesn't get a results page that is *entirely*
-pediatricians.
+**Diversity** (`_reserve_related`, Section 4.8.3): while the collaborative
+component is unavailable, 20% of the list (`MZAZI_DIVERSITY_SHARE`) is kept
+for the highest rated services in *related* categories — siblings of the top
+matches under the same service type. Those rows carry `basis:
+"related_highly_rated"` and the UI labels them. No reservation is made when
+the user filtered by category. A parent category ("service type") filter
+covers all its children.
+
+**Exclusions**: services the user has saved are never recommended (Section
+3.2.4). Evaluation additionally excludes everything seen in training.
 
 ### 3.2 Content encoders — `encoders.py`
 
@@ -323,10 +366,15 @@ active):
   bag-of-words method underneath.
 - **`build_encoder()`** reads `MZAZI_ENCODER` (`sbert` / `tfidf` / `auto`,
   default `auto`): `auto` uses SBERT if importable, else logs and falls back
-  to TF-IDF+SVD automatically — this is exactly what this local install is
-  running on (sentence-transformers wasn't installed, to skip a ~2GB
-  PyTorch download; check `/api/health` → `ml.encoder`, or `/model`, to see
-  which one is live).
+  to TF-IDF+SVD automatically. `/api/health` → `ml.encoder` shows which one is
+  live. The live model is `all-MiniLM-L6-v2`; see the README for the
+  benchmark that chose it over the multilingual model.
+- **Query encoding** (`encode_queries`): user-typed text gets the thesaurus
+  expansion plus a *query boost* — a concept that is rare in the catalogue is
+  repeated so mean pooling weights it up (*"natafuta yaya wa mtoto"* leans on
+  *nanny*, not on the generic *child*).
+- Embeddings are cached by text, so a re-index only encodes listings whose
+  text changed.
 
 Every text is expanded through `synonyms.py` **before** either encoder sees
 it (`expand_all`, applied inside both `fit`/`encode` methods) — so the
@@ -348,8 +396,9 @@ top-level README without requiring every listing to be re-written by hand.
 | `GET /health` | Liveness + which encoder is live — no token required |
 | `POST /recommend` | Top-N for a `user_id` and/or `query`, with `category`/`location`/`alpha` overrides; returns a `strategy` field (`hybrid` / `content_only` / `collaborative_only` / `popularity_fallback`) that the frontend surfaces as a human-readable note |
 | `GET /similar/{provider_id}` | Content-space nearest neighbours of one listing (powers "Similar services" on `provider.html`) |
-| `POST /reindex` / `POST /retrain` | Both call the same internal `_train()` — re-reads data, re-fits the encoder and k-NN, and persists to `MZAZI_MODEL_PATH`. A `threading.Lock` plus a `busy` flag returns `409` if a rebuild is already in flight rather than racing two fits |
-| `GET /model` | Current `EngineConfig` (k, α, encoder, density, …) and the last held-out evaluation metrics — what `admin.js`'s dashboard renders |
+| `POST /reindex` | Re-reads the catalogue and recomputes embeddings; keeps k and α |
+| `POST /retrain` | Also rebuilds the user-item matrix from all interactions and reviews α against a held-out split. Both persist to `MZAZI_MODEL_PATH`; a lock plus a `busy` flag returns `409` if a rebuild is already in flight |
+| `GET /model` | Current `EngineConfig` (k, α and where it came from, encoder, density, …), the α review grid, and held-out metrics labelled with their protocol — what the admin dashboard renders |
 
 ### 3.5 Data source — `db.py`
 
@@ -358,8 +407,10 @@ One `DataSource` class, two backends behind it: `mysql` (reads the tables in
 database required — used for tests and quick local iteration). Selected by
 `MZAZI_DATA_SOURCE`, defaulting to `mysql` if `DB_HOST` is set, else `csv`.
 `training_interactions()` prefers an explicit train/test split
-(`interactions_train`/`interactions_test`) when present, so evaluation
-metrics in `/model` aren't computed on data the model was fit on.
+(`interactions_train`/`interactions_test`) when present (CSV). Live MySQL data
+has none, so `engine.holdout_split()` holds out each user's most recent
+provider for evaluation and the α review; the served model is then fit on
+everything. `user_history()` serves the live per-user signals described in §3.
 
 ### 3.6 Offline tooling — `train.py`
 
@@ -379,7 +430,10 @@ evaluation chapter.
 `providers` (+ `provider_media`), `user_preferences`, `search_history`,
 `interactions` (the collaborative-filtering training data), `saved_services`,
 `recommendations` (persisted output, written when `persist: true` is passed
-to `/recommend`), and `admin_logs`. `seed_data.sql` — and the equivalent
+to `/recommend`), and `admin_logs` (with a `notes` column for rejection
+reasons). `provider_media.media_type` is `image` (public) or `evidence`
+(administrators only). `backend/config/migrate.js` upgrades a database created
+from an older schema. `seed_data.sql` — and the equivalent
 `seed/*.csv` files the ML service can read directly — populate 120
 providers, ~240 users and ~4,700 interactions with realistic category-scoped
 vocabulary.
@@ -400,9 +454,10 @@ vocabulary.
 4. Inside `HybridRecommender.recommend()`: the query text is encoded (through
    `synonyms.py` expansion, then the active encoder) and compared against
    every verified provider's pre-computed content vector; if the user is
-   logged in and has ≥3 interactions, their k-NN neighbourhood is blended in
-   at `α = 0.4`; results are ranked, sliced to `top_n`, and returned with a
-   `strategy` label.
+   logged in, their live history builds the preference vector and, with ≥3
+   interactions, their k-NN neighbourhood is blended in at the reviewed α;
+   saved services are dropped, results are ranked, sliced to `top_n`, and
+   returned with a `strategy` label.
 5. Express hydrates those bare results with `service_tags` /
    `service_description` from MySQL and returns them.
 6. `search.js` renders the results list and, separately, the

@@ -54,6 +54,9 @@ def main():
 
     train = frames["interactions"] if args.full else src.training_interactions(frames)
     test = frames.get("interactions_test", pd.DataFrame())
+    # Searches and declared preferences feed the preference vector (Section 4.8.1).
+    side = dict(searches=frames.get("search_history"),
+                preferences=frames.get("user_preferences"))
 
     print(f"providers {len(providers)}   train {len(train)}   test {len(test)}")
     print(f"sentence-transformers installed: {sbert_available()}")
@@ -65,9 +68,10 @@ def main():
             if choice == "sbert" and not sbert_available():
                 print("\nskipping sbert - sentence-transformers not installed")
                 continue
-            cfg = EngineConfig(k=args.k, alpha=args.alpha, encoder=choice)
+            cfg = EngineConfig(k=args.k, alpha=args.alpha, alpha_mode="fixed",
+                               encoder=choice)
             eng = HybridRecommender(cfg, encoder=build_encoder(choice)).fit(
-                providers, train, categories)
+                providers, train, categories, **side)
             if len(test):
                 cold = cold_items(train, eng.provider_ids)
                 m = eng.evaluate(test, top_n=args.top_n)
@@ -83,9 +87,10 @@ def main():
         return
 
     # ------------------------------------------------------------- train
-    cfg = EngineConfig(k=args.k, alpha=args.alpha,
+    cfg = EngineConfig(k=args.k, alpha=args.alpha, alpha_mode="fixed",
+                       alpha_source="train.py --alpha",
                        encoder=args.encoder or os.getenv("MZAZI_ENCODER", "auto"))
-    eng = HybridRecommender(cfg).fit(providers, train, categories)
+    eng = HybridRecommender(cfg).fit(providers, train, categories, **side)
     print(f"\nencoder: {eng.encoder.name}  ({eng.encoder.dim} dims)")
     print(f"matrix : {eng.n_users} users x {eng.n_items} providers, "
           f"density {eng.cfg.density_pct}%")

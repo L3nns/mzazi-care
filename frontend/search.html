@@ -17,38 +17,52 @@
   <div class="nav-actions" id="nav-actions"></div>
 </div></header>
 <main class="container">
-  <form class="search-bar" id="search-form" style="margin-top:1rem">
-    <div><label for="q">Search</label><input id="q" placeholder="Search services"></div>
+  <form class="search-bar search-bar-compact" id="search-form" role="search" style="margin-top:1rem">
+    <div><label for="q">Search</label><input id="q" placeholder="Search services" autocomplete="off"></div>
     <div><button class="btn" type="submit" style="width:100%">Search</button></div>
   </form>
 
+  <button class="btn secondary small filters-toggle" id="filters-toggle" type="button"
+          aria-controls="filters" aria-expanded="false">Filters</button>
+
   <div class="layout search-layout">
-    <aside class="panel" id="filters">
+    <aside class="panel filters-panel" id="filters" aria-label="Filter results">
       <h2>Filter results</h2>
+      <div class="field"><label for="f-type">Service type</label><select id="f-type"></select></div>
       <div class="field"><label for="f-category">Service category</label><select id="f-category"></select></div>
       <div class="field"><label for="f-location">Location</label><select id="f-location"></select></div>
       <div class="field"><label for="f-sort">Sort by</label>
         <select id="f-sort">
           <option value="relevance">Relevance</option>
-          <option value="name">Name</option>
-          <option value="newest">Newest</option>
+          <option value="rating">Highest rated</option>
           <option value="popular">Most viewed</option>
+          <option value="newest">Newest</option>
+          <option value="name">Name</option>
         </select></div>
       <button class="btn secondary small" id="clear-filters" type="button">Clear all</button>
-      <p class="muted" style="margin-top:.8rem">Only verified providers are listed.</p>
+      <p class="muted verified-note">Verified providers only. Listings appear here
+        after an administrator has reviewed their evidence.</p>
     </aside>
 
-    <section>
+    <section aria-live="polite">
       <h1 id="result-count">Searching…</h1>
+      <div id="active-filters"></div>
       <div id="results"></div>
       <div class="pagination" id="pagination"></div>
+      <div id="suggestions"></div>
     </section>
 
-    <aside class="panel rec-panel" id="rec-panel">
-      <h2>Recommended for you</h2>
-      <p class="strategy-note">Loading…</p>
-      <div class="rec-list"></div>
-    </aside>
+    <div class="side-stack">
+      <aside class="panel rec-panel" id="rec-panel" aria-label="Recommended for you">
+        <h2>Recommended for you</h2>
+        <p class="strategy-note">Loading…</p>
+        <div class="rec-list"></div>
+      </aside>
+      <aside class="panel hidden" id="recent-panel" aria-label="Recently viewed">
+        <h2>Recently viewed</h2>
+        <div class="recent-list"></div>
+      </aside>
+    </div>
   </div>
 </main>
 <footer style="border-top:1px solid var(--line);margin-top:2rem;padding:1.25rem 0;background:#fff">

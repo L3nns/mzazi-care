@@ -20,9 +20,9 @@
   <section class="hero"><div class="container">
     <h1>Find trusted maternal and childcare services</h1>
     <p class="lead">Search verified providers by service, category and location.</p>
-    <form class="search-bar" id="search-form">
+    <form class="search-bar" id="search-form" role="search">
       <div><label for="q">What do you need?</label>
-        <input id="q" placeholder="e.g. lactation consultant"></div>
+        <input id="q" placeholder="e.g. lactation consultant" autocomplete="off"></div>
       <div><label for="category">Category</label><select id="category"></select></div>
       <div><label for="location">Location</label><select id="location"></select></div>
       <div><button class="btn" type="submit" style="width:100%">Search</button></div>
@@ -30,15 +30,14 @@
   </div></section>
 
   <div class="container">
-    <section class="panel rec-panel hidden" id="home-recs" style="margin-top:1.25rem">
+    <section class="panel rec-panel" id="home-recs" style="margin-top:1.25rem">
       <h2>Personalised for you</h2>
-      <div class="rec-list"></div>
-      <p><a href="search.html">See more recommendations</a></p>
+      <div class="rec-list"><p class="muted">Loading…</p></div>
     </section>
 
-    <section style="margin:1.5rem 0">
-      <h2>Browse by category</h2>
-      <div class="stat-row" id="category-grid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))"></div>
+    <section style="margin:1.5rem 0" aria-labelledby="browse-heading">
+      <h2 id="browse-heading">Browse by category</h2>
+      <div id="category-groups"><p class="muted">Loading categories…</p></div>
     </section>
   </div>
 </main>

@@ -10,22 +10,32 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const request = require('supertest');
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret';
 process.env.BCRYPT_ROUNDS = '4';          // keep the suite fast
+process.env.UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'mzazi-uploads-'));
 
 /* ----------------------------------------------------------- stub MySQL */
 const dbPath = require.resolve('../config/db');
 const calls = [];
 let handlers = [];
 
+// requireAdmin re-reads the role from the database on every admin request.
+const ROLES = { 7: 'user', 241: 'admin', 242: 'admin' };
+const baseHandlers = [
+  [/SELECT role FROM users WHERE user_id/, (params) =>
+    (ROLES[params[0]] ? [{ role: ROLES[params[0]] }] : [])],
+];
+
 const db = {
   query: async (sql, params = []) => {
     calls.push({ sql: sql.replace(/\s+/g, ' ').trim(), params });
-    for (const [pattern, rows] of handlers) {
+    for (const [pattern, rows] of [...handlers, ...baseHandlers]) {
       if (pattern.test(sql)) return typeof rows === 'function' ? rows(params) : rows;
     }
     return [];
@@ -34,6 +44,7 @@ const db = {
     const rows = await db.query(sql, params);
     return rows.length ? rows[0] : null;
   },
+  transaction: async (fn) => fn(db),
   getPool: () => ({}),
   close: async () => {},
 };
@@ -254,7 +265,7 @@ test('an administrator can read the dashboard', async () => {
 
 test('a new listing is created pending, never verified', async () => {
   setHandlers([
-    [/SELECT category_id FROM categories/, [{ category_id: 12 }]],
+    [/SELECT c.category_id FROM categories c WHERE c.category_id/, [{ category_id: 12 }]],
     [/INSERT INTO providers/, { insertId: 200 }],
   ]);
   const res = await request(app).post('/api/admin/providers')
@@ -270,7 +281,7 @@ test('a new listing is created pending, never verified', async () => {
 });
 
 test('creating a listing under an unknown category is rejected', async () => {
-  setHandlers([[/SELECT category_id FROM categories/, []]]);
+  setHandlers([[/SELECT c.category_id FROM categories c WHERE c.category_id/, []]]);
   await request(app).post('/api/admin/providers')
     .set('Authorization', `Bearer ${adminToken}`)
     .send({
@@ -282,7 +293,8 @@ test('creating a listing under an unknown category is rejected', async () => {
 
 test('verifying a listing logs the action and triggers a re-index', async () => {
   setHandlers([
-    [/SELECT provider_id FROM providers WHERE provider_id/, [{ provider_id: 8 }]],
+    [/SELECT provider_id, verification_status FROM providers WHERE provider_id/,
+      [{ provider_id: 8, verification_status: 'pending' }]],
     [/UPDATE providers SET verification_status/, { affectedRows: 1 }],
     [/INSERT INTO admin_logs/, { insertId: 1 }],
   ]);
@@ -306,4 +318,177 @@ test('an invalid verification status is rejected', async () => {
 test('unknown API routes return a JSON 404', async () => {
   const res = await request(app).get('/api/does-not-exist').expect(404);
   assert.equal(res.body.error, 'not found');
+});
+
+/* ------------------------------------------------- RBAC re-reads the role */
+test('a demoted administrator loses access even with an admin token', async () => {
+  const stale = issueToken({ user_id: 7, role: 'admin', full_name: 'Was Admin' });
+  await request(app).get('/api/admin/stats')
+    .set('Authorization', `Bearer ${stale}`).expect(403);
+});
+
+/* -------------------------------------------- Table 4.4 alternative flow */
+test('rejecting a listing requires a reason, which is written to the log', async () => {
+  setHandlers([
+    [/SELECT provider_id, verification_status FROM providers WHERE provider_id/,
+      [{ provider_id: 8, verification_status: 'pending' }]],
+    [/UPDATE providers SET verification_status/, { affectedRows: 1 }],
+    [/INSERT INTO admin_logs/, { insertId: 1 }],
+  ]);
+  await request(app).put('/api/admin/providers/8/verify')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({ verification_status: 'rejected' }).expect(422);
+  await request(app).put('/api/admin/providers/8/verify')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({ verification_status: 'rejected', note: 'Licence certificate missing' }).expect(200);
+  const log = calls.find((c) => /INSERT INTO admin_logs/.test(c.sql));
+  assert.equal(log.params[1], 'verify:rejected');
+  assert.equal(log.params[4], 'Licence certificate missing');
+  assert.ok(!mlCalls.some(([n]) => n === 'reindexQuietly'),
+    'rejecting a pending listing does not change the searchable catalogue');
+});
+
+test('failed sign-ins to an administrator account are logged (Figure 4.6)', async () => {
+  const hash = await hashPassword('right-password');
+  setHandlers([
+    [/FROM users WHERE email/, [{
+      user_id: 241, full_name: 'Admin', email: 'admin1@mzazicare.example',
+      password_hash: hash, location: null, role: 'admin',
+    }]],
+    [/INSERT INTO admin_logs/, { insertId: 1 }],
+  ]);
+  await request(app).post('/api/auth/login')
+    .send({ email: 'admin1@mzazicare.example', password: 'wrong-password' }).expect(401);
+  const log = calls.find((c) => /INSERT INTO admin_logs/.test(c.sql));
+  assert.equal(log.params[1], 'auth:login_failed');
+});
+
+/* -------------------------------------------------------- user management */
+test('an administrator cannot change their own role', async () => {
+  await request(app).put('/api/admin/users/241/role')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({ role: 'user' }).expect(422);
+});
+
+test('the last administrator cannot be demoted', async () => {
+  setHandlers([
+    [/SELECT user_id, role FROM users WHERE user_id/, [{ user_id: 242, role: 'admin' }]],
+    [/UPDATE users SET role/, { affectedRows: 1 }],
+    [/COUNT\(\*\) AS admins/, [{ admins: 0 }]],
+  ]);
+  const res = await request(app).put('/api/admin/users/242/role')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({ role: 'user' }).expect(422);
+  assert.match(res.body.error, /at least one administrator/);
+});
+
+test('promoting a parent to administrator is logged', async () => {
+  setHandlers([
+    [/SELECT user_id, role FROM users WHERE user_id/, [{ user_id: 7, role: 'user' }]],
+    [/UPDATE users SET role/, { affectedRows: 1 }],
+    [/COUNT\(\*\) AS admins/, [{ admins: 3 }]],
+    [/INSERT INTO admin_logs/, { insertId: 1 }],
+  ]);
+  await request(app).put('/api/admin/users/7/role')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({ role: 'admin' }).expect(200);
+  assert.equal(calls.find((c) => /INSERT INTO admin_logs/.test(c.sql)).params[1], 'role:admin');
+});
+
+/* --------------------------------------------------------------- account */
+test('changing the password checks the current one first', async () => {
+  const hash = await hashPassword('old-password');
+  setHandlers([
+    [/SELECT password_hash FROM users WHERE user_id/, [{ password_hash: hash }]],
+    [/UPDATE users SET password_hash/, { affectedRows: 1 }],
+  ]);
+  await request(app).put('/api/auth/me/password')
+    .set('Authorization', `Bearer ${userToken}`)
+    .send({ current_password: 'not-it-at-all', new_password: 'brand-new-pass' }).expect(403);
+  await request(app).put('/api/auth/me/password')
+    .set('Authorization', `Bearer ${userToken}`)
+    .send({ current_password: 'old-password', new_password: 'brand-new-pass' }).expect(200);
+  const update = calls.find((c) => /UPDATE users SET password_hash/.test(c.sql));
+  assert.match(update.params[0], /^\$2[aby]\$/);
+});
+
+test('preferences naming an unknown category are rejected', async () => {
+  setHandlers([[/SELECT category_id FROM categories WHERE category_id IN/, [{ category_id: 12 }]]]);
+  await request(app).put('/api/auth/me/preferences')
+    .set('Authorization', `Bearer ${userToken}`)
+    .send({ category_ids: [12, 999] }).expect(422);
+});
+
+/* ----------------------------------------------------- keyword search SQL */
+test('search ANDs prefix terms, drops filler words and knows spelling variants', async () => {
+  setHandlers([
+    [/COUNT\(\*\) AS total/, [{ total: 1 }]],
+    [/FROM providers p JOIN categories/, []],
+  ]);
+  await request(app).get('/api/services?q=looking%20for%20day-care%20near%20me').expect(200);
+  const count = calls.find((c) => /COUNT\(\*\) AS total/.test(c.sql));
+  assert.ok(count.params.includes('+daycare*'), 'variant collapsed and prefix-matched');
+  assert.ok(count.params.includes('"day care"'), 'spaced spelling matched as a phrase');
+  assert.ok(!count.params.some((p) => /^\+(looking|near|for|me)\*$/.test(p)),
+    'filler words are not required terms');
+});
+
+test('a service type filters the whole category subtree', async () => {
+  setHandlers([
+    [/COUNT\(\*\) AS total/, [{ total: 1 }]],
+    [/FROM providers p JOIN categories/, []],
+  ]);
+  await request(app).get('/api/services?type=2').expect(200);
+  const count = calls.find((c) => /COUNT\(\*\) AS total/.test(c.sql));
+  assert.match(count.sql, /parent_category_id = \?/);
+});
+
+test('an empty result set comes with broader suggestions (Figure 4.5)', async () => {
+  setHandlers([
+    [/COUNT\(\*\) AS total/, [{ total: 0 }]],
+    [/FROM providers p WHERE p.provider_id IN/, [{ provider_id: 1, service_tags: 'lactation' }]],
+  ]);
+  const res = await request(app).get('/api/services?q=someone%20to%20help%20me%20breastfeed')
+    .expect(200);
+  assert.equal(res.body.total, 0);
+  assert.equal(res.body.suggestions.length, 1);
+  assert.equal(res.body.suggestion_basis, 'closest');
+  assert.equal(mlCalls[0][1].query, 'someone to help me breastfeed');
+  assert.equal(mlCalls[0][1].location, null, 'suggestions drop the location filter');
+});
+
+/* --------------------------------------------------------- evidence files */
+test('evidence uploads are type-checked by content, not by name', async () => {
+  setHandlers([
+    [/SELECT provider_id FROM providers WHERE provider_id/, [{ provider_id: 8 }]],
+    [/INSERT INTO provider_media/, { insertId: 4 }],
+    [/INSERT INTO admin_logs/, { insertId: 1 }],
+  ]);
+  await request(app).post('/api/admin/providers/8/media?kind=evidence')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .set('Content-Type', 'application/pdf')
+    .send(Buffer.from('<script>alert(1)</script>')).expect(415);
+
+  const pdf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(32)]);
+  const res = await request(app).post('/api/admin/providers/8/media?kind=evidence')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .set('Content-Type', 'application/pdf')
+    .send(pdf).expect(201);
+  assert.match(res.body.file_path, /^p8-evidence-[0-9a-f]{16}\.pdf$/);
+  assert.ok(fs.existsSync(path.join(process.env.UPLOAD_DIR, res.body.file_path)));
+});
+
+test('evidence is never served from the public media route', async () => {
+  setHandlers([[/FROM provider_media m/, []]]);
+  await request(app).get('/api/services/media/4').expect(404);
+  const sel = calls.find((c) => /FROM provider_media m/.test(c.sql));
+  assert.match(sel.sql, /media_type = 'image'/);
+});
+
+/* ------------------------------------------------------------- categories */
+test('a category that still holds providers cannot be deleted', async () => {
+  setHandlers([[/FROM categories c WHERE c.category_id = \?/,
+    [{ category_id: 12, category_name: 'Lactation', providers: 3, children: 0 }]]]);
+  await request(app).delete('/api/admin/categories/12')
+    .set('Authorization', `Bearer ${adminToken}`).expect(409);
 });

@@ -132,13 +132,18 @@ CREATE TABLE recommendations (
     INDEX idx_rec_user (user_id, generated_at)
 ) ENGINE=InnoDB;
 
+-- Audit trail. `notes` carries the reason given when a listing is rejected
+-- (Table 4.4, alternative flow) and similar free-text context.
 CREATE TABLE admin_logs (
     log_id          INT AUTO_INCREMENT PRIMARY KEY,
     admin_id        INT NOT NULL,
     action_type     VARCHAR(60) NOT NULL,
     entity_affected VARCHAR(60),
     entity_id       INT,
+    notes           VARCHAR(500) NULL,
     performed_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_log_admin FOREIGN KEY (admin_id)
-        REFERENCES users(user_id) ON DELETE CASCADE
+        REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_log_entity (entity_affected, entity_id),
+    INDEX idx_log_time (performed_at)
 ) ENGINE=InnoDB;

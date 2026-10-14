@@ -21,7 +21,7 @@ SYNONYM_GROUPS: list[list[str]] = [
     ["breastfeeding", "breast feeding", "nursing", "lactation", "latch",
      "milk supply", "expressing", "kunyonyesha", "maziwa ya mama"],
     ["pregnancy", "pregnant", "expecting", "expectant", "gestation", "prenatal",
-     "antenatal", "ante natal", "mimba", "mja mzito"],
+     "antenatal", "ante natal", "mimba", "mja mzito", "mjamzito", "ujauzito"],
     ["birth", "labour", "labor", "delivery", "childbirth", "giving birth",
      "kujifungua", "uzazi"],
     ["midwife", "midwifery", "birth attendant", "mkunga"],
@@ -35,7 +35,7 @@ SYNONYM_GROUPS: list[list[str]] = [
     ["nanny", "house help", "caregiver", "child minder", "childminder", "ayah",
      "yaya", "mlezi"],
     ["daycare", "day care", "creche", "crèche", "childcare centre",
-     "childcare center", "nursery"],
+     "childcare center", "nursery", "chekechea", "kituo cha watoto"],
     ["mental health", "depression", "anxiety", "counselling", "counseling",
      "therapy", "therapist", "emotional support", "baby blues",
      "postnatal depression", "afya ya akili"],
@@ -47,7 +47,8 @@ SYNONYM_GROUPS: list[list[str]] = [
     ["parenting", "parent coaching", "sleep training", "behaviour", "behavior",
      "discipline", "malezi"],
     ["scan", "ultrasound", "sonogram"],
-    ["clinic", "hospital", "health centre", "health center", "dispensary"],
+    ["clinic", "hospital", "health centre", "health center", "dispensary",
+     "kliniki", "hospitali", "zahanati"],
     ["affordable", "cheap", "low cost", "budget", "bei nafuu"],
     ["home visit", "home based", "at home", "house call", "nyumbani"],
 ]
@@ -107,6 +108,44 @@ for _term, _canon in _LOOKUP.items():
 
 _WORD = re.compile(r"[a-z]+")
 
+# Spelling variants of one term, collapsed before anything else reads the text
+# (Section 3.2.2: "Child Care", "Childcare" and "Child-Care" are one form).
+_VARIANTS: list[tuple[re.Pattern, str]] = [
+    (re.compile(p, re.IGNORECASE), r) for p, r in (
+        (r"\bchild[\s_-]+care\b", "childcare"),
+        (r"\bday[\s_-]+care\b", "daycare"),
+        (r"\bhealth[\s_-]+care\b", "healthcare"),
+        (r"\bbreast[\s_-]+(feed|fed)", r"breast\1"),
+        (r"\bante[\s_-]+natal\b", "antenatal"),
+        (r"\bpre[\s_-]+natal\b", "prenatal"),
+        (r"\bpost[\s_-]+natal\b", "postnatal"),
+        (r"\bpost[\s_-]+partum\b", "postpartum"),
+        (r"\bnew[\s_-]+born\b", "newborn"),
+        (r"\bchild[\s_-]+minder\b", "childminder"),
+        (r"\bpre[\s_-]+school\b", "preschool"),
+        (r"\bhome[\s_-]+visits?\b", "home visit"),
+    )
+]
+_PUNCT = re.compile(r"[^\w\s']+", re.UNICODE)
+_SPACE = re.compile(r"\s+")
+
+
+def standardise(text: str) -> str:
+    """Collapse spelling variants of the same term onto one form."""
+    for pat, repl in _VARIANTS:
+        text = pat.sub(repl, text)
+    return text
+
+
+def preprocess(text: str) -> str:
+    """Section 4.8.1 preprocessing: lowercase, strip punctuation, standardise
+    variants. Stop words are left in place on purpose - TF-IDF removes them
+    itself, and a sentence encoder needs them to read the sentence."""
+    if not text:
+        return ""
+    low = _PUNCT.sub(" ", str(text).lower().replace("-", " "))
+    return _SPACE.sub(" ", standardise(low)).strip()
+
 
 def canonical_tags(text: str) -> list[str]:
     """Every canonical group tag that appears in the text, de-duplicated."""
@@ -131,12 +170,14 @@ def canonical_tags(text: str) -> list[str]:
 
 def expand(text: str, repeat: int = 1) -> str:
     """
-    Append the canonical tags for whatever domain terms the text contains.
+    Preprocess the text, then append the canonical tags for whatever domain
+    terms it contains.
 
     `repeat` controls how strongly the tags weigh in a bag-of-words model; the
     neural encoder ignores it in practice because it reads the sentence, not
     term counts.
     """
+    text = preprocess(text)
     tags = canonical_tags(text)
     if not tags:
         return text

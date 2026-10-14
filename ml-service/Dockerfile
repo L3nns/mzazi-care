@@ -8,7 +8,10 @@ ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 ENV HF_HOME=/app/.cache/huggingface SENTENCE_TRANSFORMERS_HOME=/app/.cache/st
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# CPU-only PyTorch first: the default wheel on Linux bundles CUDA (several GB)
+# that this service never uses. sentence-transformers then reuses it.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip install --no-cache-dir -r requirements.txt
 
 ARG PREFETCH_MODEL=all-MiniLM-L6-v2
 ENV PREFETCH_MODEL=${PREFETCH_MODEL}

@@ -7,6 +7,7 @@
  */
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { one } = require('../config/db');
 
 const SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
@@ -53,12 +54,23 @@ function optionalAuth(req, _res, next) {
   return next();
 }
 
-function requireAdmin(req, res, next) {
+/**
+ * The role is re-read from the database rather than trusted from the token,
+ * so an administrator who is demoted loses access at once, not when their
+ * session expires.
+ */
+async function requireAdmin(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'authentication required' });
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'administrator role required' });
+  try {
+    const row = await one('SELECT role FROM users WHERE user_id = ?', [req.user.user_id]);
+    if (!row || row.role !== 'admin') {
+      return res.status(403).json({ error: 'administrator role required' });
+    }
+    req.user.role = 'admin';
+    return next();
+  } catch (err) {
+    return next(err);
   }
-  return next();
 }
 
 module.exports = {

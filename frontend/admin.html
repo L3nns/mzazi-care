@@ -16,17 +16,34 @@
   </nav>
   <div class="nav-actions" id="nav-actions"></div>
 </div></header>
-<main class="container" style="padding-top:1rem">
+<main class="container" style="padding-top:1rem" id="admin-root">
   <h1>Administration</h1>
-  <div class="tabs">
-    <button class="tab active" data-view="dashboard">Dashboard</button>
-    <button class="tab" data-view="pending">Pending verification</button>
-    <button class="tab" data-view="listings">All listings</button>
-    <button class="tab" data-view="form">Add listing</button>
-    <button class="tab" data-view="logs">Activity log</button>
+  <div class="tabs admin-tabs" role="tablist" id="admin-tabs">
+    <button class="tab active" type="button" data-view="dashboard">Dashboard</button>
+    <button class="tab" type="button" data-view="pending">Pending verification <span class="count-badge hidden" id="pending-count"></span></button>
+    <button class="tab" type="button" data-view="listings">Provider listings</button>
+    <button class="tab" type="button" data-view="form">Add listing</button>
+    <button class="tab" type="button" data-view="categories">Categories</button>
+    <button class="tab" type="button" data-view="users">Registered users</button>
+    <button class="tab" type="button" data-view="reports">Reports</button>
+    <button class="tab" type="button" data-view="logs">Activity log</button>
   </div>
-  <div id="admin-root"><div id="admin-view"></div></div>
+  <div id="admin-view"></div>
 </main>
+<dialog id="reason-dialog" class="dialog">
+  <form method="dialog" id="reason-form">
+    <h2 id="reason-title">Reject listing</h2>
+    <p class="muted" id="reason-help">Say what further information the provider must supply.
+      It is kept with the listing's history.</p>
+    <label for="reason-text">Reason</label>
+    <textarea id="reason-text" maxlength="500" required minlength="5"
+      placeholder="e.g. Licence certificate missing; please send a current copy"></textarea>
+    <div class="dialog-actions">
+      <button class="btn secondary" value="cancel" formnovalidate type="submit">Cancel</button>
+      <button class="btn danger" value="ok" type="submit" id="reason-ok">Reject listing</button>
+    </div>
+  </form>
+</dialog>
 <footer style="border-top:1px solid var(--line);margin-top:2rem;padding:1.25rem 0;background:#fff">
   <div class="container muted">Mzazi Care Discovery &amp; Catalog System · capstone prototype · seeded with synthetic data</div>
 </footer>

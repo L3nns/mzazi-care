@@ -36,8 +36,35 @@ async function one(sql, params = []) {
   return rows.length ? rows[0] : null;
 }
 
+/**
+ * Runs `fn` inside one transaction (Table 4.2, reliability: "transactional
+ * updates"). `fn` receives an object with the same query/one interface, bound
+ * to the transaction's connection; any throw rolls everything back.
+ */
+async function transaction(fn) {
+  const conn = await getPool().getConnection();
+  const tx = {
+    query: async (sql, params = []) => { const [rows] = await conn.execute(sql, params); return rows; },
+    one: async (sql, params = []) => {
+      const rows = await tx.query(sql, params);
+      return rows.length ? rows[0] : null;
+    },
+  };
+  try {
+    await conn.beginTransaction();
+    const out = await fn(tx);
+    await conn.commit();
+    return out;
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 async function close() {
   if (pool) { await pool.end(); pool = null; }
 }
 
-module.exports = { query, one, getPool, close };
+module.exports = { query, one, transaction, getPool, close };

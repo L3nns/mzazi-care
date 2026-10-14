@@ -9,3 +9,4 @@ model/
 venv/
 .venv/
 *.log
+backend/uploads/

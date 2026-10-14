@@ -49,7 +49,8 @@ class DataSource:
     # ------------------------------------------------------------------ api
     def load(self) -> dict[str, pd.DataFrame]:
         frames = self._load_mysql() if self.source == "mysql" else self._load_csv()
-        for key in ("providers", "interactions", "categories", "users"):
+        for key in ("providers", "interactions", "categories", "users",
+                    "saved_services", "search_history", "user_preferences"):
             frames.setdefault(key, pd.DataFrame())
         return frames
 
@@ -65,7 +66,8 @@ class DataSource:
                 f"no seed CSVs under {d}. Set MZAZI_CSV_DIR to the dataset folder.")
         out = {}
         for name in ("providers", "categories", "users", "interactions",
-                     "saved_services", "interactions_train", "interactions_test"):
+                     "saved_services", "interactions_train", "interactions_test",
+                     "search_history", "user_preferences"):
             f = d / f"{name}.csv"
             if f.exists():
                 out[name] = pd.read_csv(f)
@@ -101,6 +103,9 @@ class DataSource:
                                FROM interactions""",
             "saved_services": "SELECT saved_id, user_id, provider_id, saved_at "
                               "FROM saved_services",
+            "search_history": "SELECT user_id, query_text, searched_at "
+                              "FROM search_history WHERE query_text IS NOT NULL",
+            "user_preferences": "SELECT user_id, category_id FROM user_preferences",
         }
         conn = self._connect()
         try:
@@ -112,6 +117,39 @@ class DataSource:
             log.info("loaded from MySQL (%d providers, %d interactions)",
                      len(out["providers"]), len(out["interactions"]))
             return out
+        finally:
+            conn.close()
+
+    # --------------------------------------------------- live user history
+    def user_history(self, user_id: int, max_searches: int = 20) -> dict | None:
+        """
+        What one user has done so far, read at request time (Figure 4.3, step 7)
+        so a parent who registered, searched or saved a provider a minute ago
+        is not still treated as a stranger until the next retrain. CSV mode
+        has no live data and returns None, so the engine uses its fit-time view.
+        """
+        if self.source != "mysql":
+            return None
+        conn = self._connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT provider_id, interaction_weight FROM interactions "
+                            "WHERE user_id = %s", (user_id,))
+                inter = [(int(r["provider_id"]), float(r["interaction_weight"]))
+                         for r in cur.fetchall()]
+                cur.execute("SELECT query_text FROM search_history WHERE user_id = %s "
+                            "AND query_text IS NOT NULL AND query_text <> '' "
+                            "ORDER BY searched_at DESC, search_id DESC LIMIT %s",
+                            (user_id, max_searches))
+                queries = [r["query_text"] for r in cur.fetchall()][::-1]
+                cur.execute("SELECT category_id FROM user_preferences WHERE user_id = %s",
+                            (user_id,))
+                prefs = [int(r["category_id"]) for r in cur.fetchall()]
+                cur.execute("SELECT provider_id FROM saved_services WHERE user_id = %s",
+                            (user_id,))
+                saved = [int(r["provider_id"]) for r in cur.fetchall()]
+            return {"interactions": inter, "queries": queries,
+                    "preferred_categories": prefs, "saved": saved}
         finally:
             conn.close()
 
