@@ -11,6 +11,7 @@ interpretation lives in docs/research/FINDINGS.md.
 from __future__ import annotations
 
 import argparse
+import os
 import time
 
 from research.common import ROOT, OUT_DIR, environment
@@ -36,7 +37,10 @@ def main():
         "",
         "Environment: " + ", ".join(f"{k} {v}" for k, v in env.items()) + ". "
         "Bootstrap: 2,000 resamples, seed 7. Raw per-query and per-user values are in "
-        f"`{OUT_DIR.relative_to(ROOT).as_posix()}/`.",
+        # MZAZI_MODEL_DIR can point outside the repo (CI keeps it in a temp
+        # directory), so OUT_DIR is not always a subpath of ROOT: relpath
+        # handles both, where Path.relative_to would raise.
+        f"`{os.path.relpath(OUT_DIR, ROOT).replace(os.sep, '/')}/`.",
         "",
     ]
     out = ROOT / "docs" / "research" / "RESULTS.md"
