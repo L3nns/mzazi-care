@@ -35,9 +35,13 @@ jobs:
       # The unit tests use the light encoder; the full-stack job below runs the
       # sentence-transformer one that ships.
       MZAZI_ENCODER: tfidf
-      MZAZI_MODEL_DIR: ${{ runner.temp }}/model
     steps:
       - uses: actions/checkout@v4
+      # job-level `env:` cannot reference the `runner` context (only steps
+      # can), so paths under the runner's temp directory are resolved here
+      # and exported to $GITHUB_ENV for every later step in this job.
+      - name: Resolve runner-dependent paths
+        run: echo "MZAZI_MODEL_DIR=$RUNNER_TEMP/model" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -75,12 +79,17 @@ jobs:
       JWT_SECRET: ci-only-jwt-secret-0123456789abcdef0123456789
       MZAZI_DATA_SOURCE: mysql
       MZAZI_ENCODER: sbert
-      MZAZI_MODEL_DIR: ${{ runner.temp }}/model
-      MZAZI_MODEL_PATH: ${{ runner.temp }}/model/hybrid_model.joblib
-      HF_HOME: ${{ runner.temp }}/hf
       LOG_FORMAT: json
     steps:
       - uses: actions/checkout@v4
+      # job-level `env:` cannot reference the `runner` context (only steps
+      # can), so paths under the runner's temp directory are resolved here
+      # and exported to $GITHUB_ENV for every later step in this job.
+      - name: Resolve runner-dependent paths
+        run: |
+          echo "MZAZI_MODEL_DIR=$RUNNER_TEMP/model" >> "$GITHUB_ENV"
+          echo "MZAZI_MODEL_PATH=$RUNNER_TEMP/model/hybrid_model.joblib" >> "$GITHUB_ENV"
+          echo "HF_HOME=$RUNNER_TEMP/hf" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 20
