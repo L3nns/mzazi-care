@@ -6,6 +6,7 @@
 <title>Search results · Mzazi Care</title>
 <meta name="description" content="Find trusted maternal and childcare services in Nairobi.">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css">
 </head>
 <body>
 <header class="site-header"><div class="container nav">
@@ -54,11 +55,31 @@
     </aside>
 
     <section aria-live="polite">
-      <h1 id="result-count">Searching…</h1>
+      <div class="results-head">
+        <h1 id="result-count">Searching…</h1>
+        <div class="view-toggle" role="group" aria-label="Show results as">
+          <button type="button" id="view-list" aria-pressed="true">List</button>
+          <button type="button" id="view-map" aria-pressed="false">Map</button>
+        </div>
+      </div>
       <div id="active-filters"></div>
-      <div id="results"></div>
-      <div class="pagination" id="pagination"></div>
-      <div id="suggestions"></div>
+      <div id="list-view">
+        <div id="results"></div>
+        <div class="pagination" id="pagination"></div>
+        <div id="suggestions"></div>
+      </div>
+      <div id="map-view" class="hidden">
+        <form id="place-form" class="place-search" role="search" novalidate>
+          <label for="place-q" class="sr-only">Find a place on the map</label>
+          <input id="place-q" placeholder="Find a place, e.g. Yaya Centre or Kilimani" autocomplete="off" maxlength="120">
+          <button class="btn small" type="submit">Find</button>
+        </form>
+        <div id="place-results"></div>
+        <div id="map" role="region" aria-label="Map of services by area"></div>
+        <p class="muted" id="map-status"></p>
+        <p class="muted map-credit">Services are shown at the centre of the area they serve, not at an address.</p>
+        <ul class="map-areas" id="map-areas" aria-label="Areas on the map"></ul>
+      </div>
     </section>
 
     <div class="side-stack">
@@ -86,4 +107,5 @@
 </footer>
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
+<script src="js/map.js"></script>
 <script src="js/search.js"></script></body></html>

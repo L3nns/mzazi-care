@@ -472,7 +472,7 @@ paths:
       tags: [catalogue]
       summary: Active service areas
       responses:
-        '200': { description: '`{ locations: [{ location, has_coordinates, provider_count }] }`' }
+        '200': { description: '`{ locations: [{ location, has_coordinates, latitude, longitude, provider_count }] }` - coordinates are approximate area centres.' }
   /services/media/{mediaId}:
     get:
       tags: [catalogue]
@@ -490,6 +490,48 @@ paths:
       responses:
         '200': { description: The listing. }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /geo/search:
+    get:
+      tags: [catalogue]
+      summary: Find a place for the map
+      description: |
+        The platform's own service areas are matched first. Otherwise the text
+        is looked up with OpenStreetMap's Nominatim, limited to Nairobi (unless
+        `GEOCODER=off`), at most one request a second, cached. Every place
+        comes with its nearest service areas (distances between centres).
+        Rate limit 30 requests a minute.
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 120 } }
+      responses:
+        '200':
+          description: Places, best first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  source: { type: string, enum: [areas, openstreetmap, none] }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        lat: { type: number }
+                        lng: { type: number }
+                        source: { type: string, enum: [area, openstreetmap] }
+                        area_name: { type: string, description: When the place is a service area. }
+                        nearest:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              area_name: { type: string }
+                              distance_km: { type: number }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '503': { description: The geocoder is busy; try again shortly. }
+        '504': { description: The geocoder did not answer in time. }
 
   # -------------------------------------------------------------- activity
   /interactions:

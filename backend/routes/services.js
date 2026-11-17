@@ -259,14 +259,22 @@ router.get('/locations', asyncRoute(async (_req, res) => {
   const rows = await query(
     `SELECT a.area_name AS location,
             (a.latitude IS NOT NULL) AS has_coordinates,
+            a.latitude, a.longitude,
             COUNT(DISTINCT p.provider_id) AS provider_count
      FROM service_areas a
      LEFT JOIN provider_service_areas psa ON psa.area_id = a.area_id
      LEFT JOIN providers p ON p.provider_id = psa.provider_id AND p.verification_status = 'verified'
      WHERE a.is_active = 1
-     GROUP BY a.area_id, a.area_name, a.latitude ORDER BY a.area_name`,
+     GROUP BY a.area_id, a.area_name, a.latitude, a.longitude ORDER BY a.area_name`,
   );
-  res.json({ locations: rows.map((r) => ({ ...r, has_coordinates: !!r.has_coordinates })) });
+  // Approximate area centres, for the map; never a provider's address.
+  res.json({
+    locations: rows.map((r) => ({
+      ...r, has_coordinates: !!r.has_coordinates,
+      latitude: r.latitude === null ? null : Number(r.latitude),
+      longitude: r.longitude === null ? null : Number(r.longitude),
+    })),
+  });
 }));
 
 /** Public profile images. Evidence documents are never served from here. */

@@ -216,7 +216,26 @@ services:
 
 `LOG_LEVEL=debug` adds static-file and health-check requests.
 
-## 10. Data retention and deletion
+## 10. The map and its third-party services
+
+The search page's map uses two OpenStreetMap services. Both are free and
+run by volunteers, with usage policies meant for light use.
+
+| Service | Used for | Policy | If you outgrow it |
+| --- | --- | --- | --- |
+| `tile.openstreetmap.org` | map images, loaded by the visitor's browser | [tile usage policy](https://operations.osmfoundation.org/policies/tiles/): attribution (shown), no heavy use | a commercial tile provider; change `TILES` in `frontend/js/map.js` and `imgSrc` in `backend/server.js` |
+| Nominatim | finding places that are not service areas, from the backend | [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/): at most 1 request a second (enforced), identifying User-Agent, results cached | `NOMINATIM_URL` for your own or a paid Nominatim; `GEOCODER=off` to match service areas only |
+
+- **Set `GEOCODER_CONTACT`** to a monitored email address; it goes in the
+  User-Agent.
+- **Place search has its own rate limit:** 30 requests a minute per visitor,
+  and at most 5 queued lookups. Beyond that it answers 503 ("busy").
+- **Both services see visitor data.** The tile servers see the browser's IP
+  address; Nominatim sees the typed place text. The privacy notice says so.
+- **Leaflet 1.9.4 is shipped with the site** (`frontend/vendor/leaflet-1.9.4/`,
+  BSD-2-Clause licence included), so no script comes from a CDN.
+
+## 11. Data retention and deletion
 
 A daily job in the backend (`backend/services/retention.js`) deletes personal
 data past its period. Run it by hand with
@@ -248,7 +267,7 @@ Registered users; that deletion is recorded in the audit log.
 - **Administrator accounts cannot be deleted.** Remove the role first. Their
   audit entries are kept, with the account link cleared.
 
-## 11. Monitoring
+## 12. Monitoring
 
 - **Liveness:** `GET /api/health` (the Docker health check already polls it).
   Alert if `ml.status` is not `ok` or `ml.model_loaded` is false for more than
@@ -261,7 +280,7 @@ Registered users; that deletion is recorded in the audit log.
   `DOCUMENT_WARN_DAYS`. Listings with lapsed documents are moved to "expired"
   automatically each day.
 
-## 12. Before going live
+## 13. Before going live
 
 - [ ] The three secrets in `.env` are new random values; `.env` is `chmod 600`.
 - [ ] The seed data is not loaded (or is deliberately kept for a demonstration).
@@ -272,3 +291,4 @@ Registered users; that deletion is recorded in the audit log.
 - [ ] Log rotation is configured.
 - [ ] `/api/health` is monitored.
 - [ ] The privacy notice names the real data controller and contact.
+- [ ] `GEOCODER_CONTACT` is set, and expected map traffic fits the OpenStreetMap usage policies (section 10).
