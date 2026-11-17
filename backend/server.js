@@ -44,7 +44,8 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'blob:'],
+      // Map images for the search page's map (OpenStreetMap; attribution shown).
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://tile.openstreetmap.org'],
       connectSrc: ["'self'"],
     },
   },
@@ -68,6 +69,8 @@ app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60_000, max: 20 }));
 app.use('/api/auth/register', rateLimit({ windowMs: 60 * 60_000, max: 10 }));
 // Six-digit codes are guessable without a tight limit on attempts.
 app.use('/api/auth/mfa', rateLimit({ windowMs: 15 * 60_000, max: 20 }));
+// Place search can reach a third-party geocoder that allows one request a second.
+app.use('/api/geo', rateLimit({ windowMs: 60_000, max: 30 }));
 
 /* --------------------------------------------------------------- routes */
 app.get('/api/health', async (_req, res) => {
@@ -88,6 +91,7 @@ app.use('/api/interactions', require('./routes/interactions'));
 app.use('/api/saved', require('./routes/saved'));
 app.use('/api/recommendations', require('./routes/recommendations'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/geo', require('./routes/geo'));
 
 /* ---------------------------------------------------------- front end */
 const FRONTEND = process.env.FRONTEND_DIR

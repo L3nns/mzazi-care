@@ -753,6 +753,97 @@ test('an empty area search offers the same search in nearby areas, nearest first
   assert.ok(near.params.includes('+midwife*'), 'same search terms');
 });
 
+/* ------------------------------------------------------- map: place search */
+const geocoder = require('../services/geocoder');
+/** Replaces fetch for the geocoder; returns the list of URLs it was asked for. */
+function fakeNominatim(reply) {
+  const asked = [];
+  const real = global.fetch;
+  global.fetch = async (url, opts) => {
+    asked.push({ url: String(url), headers: opts?.headers || {}, at: Date.now() });
+    const { status = 200, body = [] } = typeof reply === 'function' ? reply(url) : reply;
+    return { ok: status < 400, status, json: async () => body };
+  };
+  return { asked, restore: () => { global.fetch = real; } };
+}
+
+test('a service area is found on our own data, without asking a third party', async () => {
+  freshAreas(); geocoder.reset();
+  setHandlers([[/FROM service_areas\s+WHERE is_active = 1/, AREA_ROWS]]);
+  const fake = fakeNominatim({ body: [] });
+  try {
+    const res = await request(app).get('/api/geo/search?q=kilimani').expect(200);
+    assert.equal(res.body.source, 'areas');
+    assert.equal(res.body.results[0].area_name, 'Kilimani');
+    assert.deepEqual(res.body.results[0].nearest[0], { area_name: 'Kilimani', distance_km: 0 });
+    assert.equal(fake.asked.length, 0);
+  } finally { fake.restore(); }
+});
+
+test('another place is looked up in Nairobi, once, and comes with its nearest areas', async () => {
+  freshAreas(); geocoder.reset();
+  setHandlers([[/FROM service_areas\s+WHERE is_active = 1/, AREA_ROWS]]);
+  const fake = fakeNominatim({ body: [
+    { display_name: 'Yaya Centre, Argwings Kodhek Road, Kilimani, Nairobi, Kenya', lat: '-1.2925', lon: '36.7870' },
+    // A shop inside the same centre is the same place, not another choice.
+    { display_name: 'CBA ATM, Yaya Centre, Argwings Kodhek Road, Nairobi', lat: '-1.2927', lon: '36.7872' },
+  ] });
+  try {
+    const res = await request(app).get('/api/geo/search?q=Yaya%20Centre').expect(200);
+    assert.equal(res.body.source, 'openstreetmap');
+    const place = res.body.results[0];
+    assert.equal(place.name, 'Yaya Centre, Argwings Kodhek Road, Kilimani');
+    assert.equal(res.body.results.length, 1, 'places within 300 m of a better one are merged');
+    assert.equal(place.nearest[0].area_name, 'Kilimani');
+    assert.ok(place.nearest[0].distance_km < 1);
+    const { url, headers } = fake.asked[0];
+    assert.match(url, /countrycodes=ke/);
+    assert.match(url, /bounded=1/);
+    assert.match(url, /q=Yaya%20Centre/);
+    assert.match(headers['User-Agent'], /^MzaziCare\//, 'Nominatim requires an identifying User-Agent');
+    await request(app).get('/api/geo/search?q=yaya%20centre').expect(200);
+    assert.equal(fake.asked.length, 1, 'the same place is answered from the cache');
+  } finally { fake.restore(); }
+});
+
+test('the geocoder is asked at most once a second', async () => {
+  freshAreas(); geocoder.reset();
+  setHandlers([[/FROM service_areas\s+WHERE is_active = 1/, AREA_ROWS]]);
+  const fake = fakeNominatim({ body: [] });
+  try {
+    await Promise.all([
+      request(app).get('/api/geo/search?q=Sarit%20Centre').expect(200),
+      request(app).get('/api/geo/search?q=Junction%20Mall').expect(200),
+    ]);
+    assert.equal(fake.asked.length, 2);
+    const gap = Math.abs(fake.asked[1].at - fake.asked[0].at);
+    assert.ok(gap >= geocoder.GAP_MS - 20, `requests ${gap} ms apart`);
+  } finally { fake.restore(); }
+});
+
+test('place search can be switched off, and reports a busy geocoder', async () => {
+  freshAreas(); geocoder.reset();
+  setHandlers([[/FROM service_areas\s+WHERE is_active = 1/, AREA_ROWS]]);
+  const fake = fakeNominatim({ status: 429 });
+  try {
+    process.env.GEOCODER = 'off';
+    const off = await request(app).get('/api/geo/search?q=Sarit%20Centre').expect(200);
+    assert.deepEqual(off.body, { source: 'none', results: [] });
+    assert.equal(fake.asked.length, 0);
+    delete process.env.GEOCODER;
+    await request(app).get('/api/geo/search?q=Sarit%20Centre').expect(503);
+    await request(app).get('/api/geo/search?q=a').expect(422);
+  } finally { fake.restore(); delete process.env.GEOCODER; }
+});
+
+test('area centres are published for the map', async () => {
+  setHandlers([[/FROM service_areas a/, [
+    { location: 'Kilimani', has_coordinates: 1, latitude: '-1.29210', longitude: '36.78560', provider_count: 7 }]]]);
+  const res = await request(app).get('/api/services/locations').expect(200);
+  assert.deepEqual(res.body.locations[0],
+    { location: 'Kilimani', has_coordinates: true, latitude: -1.2921, longitude: 36.7856, provider_count: 7 });
+});
+
 /* ------------------------------------------------ recommendation feedback */
 test('recommendations rank by the parent\'s area and hide what they turned down', async () => {
   freshAreas();

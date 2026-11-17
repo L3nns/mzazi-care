@@ -83,7 +83,10 @@ const API = (() => {
 
     categories: () => call('/categories', { auth: false }),
     locations: () => call('/services/locations', { auth: false }),
+    geoSearch: (q) => call(`/geo/search${qs({ q })}`, { auth: false }),
     search: (params) => call(`/services${qs(params)}`),
+    // The map's copy of a search: anonymous, so it is not added to the history again.
+    searchForMap: (params) => call(`/services${qs(params)}`, { auth: false }),
     provider: (id) => call(`/services/${id}`),
 
     recommendations: (params) => call(`/recommendations${qs(params)}`),

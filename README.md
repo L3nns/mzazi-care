@@ -39,6 +39,11 @@ Free-text search uses the same engine: a parent's words are matched by
 meaning, in English or Kiswahili, and a place named in the query becomes a
 visible area filter. Keyword SQL remains as the automatic fallback.
 
+Results can also be seen **on a map** (Leaflet and OpenStreetMap), grouped by
+the area each provider serves. A parent can search the map for any place in
+Nairobi ("Yaya Centre", "Kenyatta National Hospital") and ask for the services
+near it. Providers are shown at area centres, never at an address.
+
 ## Run it
 
 ```bash
@@ -332,13 +337,13 @@ logs.
 ## Tests
 
 ```bash
-cd backend && npm test                              # 91 passed
+cd backend && npm test                              # 96 passed
 cd ml-service && venv/Scripts/python -m pytest -q   # 110 passed, 1 skipped
 # Express against the real ML service (database stubbed):
 ML_SERVICE_URL=http://127.0.0.1:8000 ML_SERVICE_TOKEN=<your token> node tests/integration.smoke.js
 # In a browser, against a running stack:
 cd e2e && npm install && npx playwright install chromium
-E2E_BASE_URL=http://localhost:4000 npx playwright test   # 9 passed, 1 skipped
+E2E_BASE_URL=http://localhost:4000 npx playwright test   # 12 passed, 1 skipped
 ```
 
 The skipped browser test creates an account; it runs with `E2E_WRITE=1` (CI
@@ -356,8 +361,8 @@ sentence-transformers is absent.
   records search text; and that `openapi.yaml` matches the routes.
 - **Browser tests.** A paraphrased question, Kiswahili with a place, the
   nearby-areas fallback, an out-of-scope request, the weak-match notice,
-  opening a provider, and a new parent's first session ending with deleting
-  the account.
+  opening a provider, the map (areas, place search, switching views), and a
+  new parent's first session ending with deleting the account.
 
 **CI** (`.github/workflows/ci.yml`) runs:
 

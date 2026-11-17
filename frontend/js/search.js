@@ -1,7 +1,11 @@
-/* Results page: filters, listings, and a distinct recommendation panel (Figure 4.10). */
+/* Results page: filters, listings or a map, and a distinct recommendation panel (Figure 4.10). */
 let state = { page: 1 };
 let allCategories = [];
 let runId = 0;
+let view = 'list';                     // 'list' | 'map'; kept in the URL as ?view=map
+
+/** The page address for the current search (and view). */
+const pageUrl = () => `search.html${API.qs({ ...state, view: view === 'map' ? 'map' : '' })}`;
 
 /** The plain-language basis of the list (Section 4.10: "explains the basis of the suggestion"). */
 function strategyNote(strategy) {
@@ -44,6 +48,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     + locs.locations.map((l) => `<option value="${UI.esc(l.location)}"${l.location === state.location ? ' selected' : ''}>${UI.esc(l.location)}</option>`).join('');
   document.getElementById('f-sort').value = state.sort;
   document.getElementById('f-within').value = state.within_km;
+
+  // List or map. The map shows the same search, grouped by area.
+  document.getElementById('view-list').addEventListener('click', () => setView('list'));
+  document.getElementById('view-map').addEventListener('click', () => setView('map'));
+  document.getElementById('place-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = document.getElementById('place-q').value.trim();
+    if (text.length >= 2) MapView.findPlace(text);
+  });
+  MapView.onAreaChosen(applyArea);
+  setView(p.view === 'map' ? 'map' : 'list', false);
 
   document.getElementById('search-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -96,9 +111,31 @@ function fillCategories() {
 
 async function run() {
   const id = ++runId;
-  history.replaceState(null, '', `search.html${API.qs(state)}`);
+  history.replaceState(null, '', pageUrl());
   renderActiveFilters();
-  await Promise.all([loadResults(id), loadRecommendations(id)]);
+  await Promise.all([loadResults(id), loadRecommendations(id),
+    view === 'map' ? MapView.render(state) : null]);
+}
+
+function setView(next, render = true) {
+  view = next;
+  document.getElementById('list-view').classList.toggle('hidden', view !== 'list');
+  document.getElementById('map-view').classList.toggle('hidden', view !== 'map');
+  document.getElementById('view-list').setAttribute('aria-pressed', String(view === 'list'));
+  document.getElementById('view-map').setAttribute('aria-pressed', String(view === 'map'));
+  history.replaceState(null, '', pageUrl());
+  if (render && view === 'map') MapView.render(state);
+}
+
+/** From the map: search one area (and, for a place between areas, its neighbours). */
+function applyArea(area, withinKm) {
+  state.location = area;
+  state.within_km = withinKm || '';
+  const loc = document.getElementById('f-location');
+  if ([...loc.options].some((o) => o.value === area)) loc.value = area;
+  document.getElementById('f-within').value = state.within_km;
+  state.page = 1;
+  run();
 }
 
 function renderActiveFilters() {
@@ -141,7 +178,7 @@ async function loadResults(id) {
       document.getElementById('q').value = state.q;
       const sel = document.getElementById('f-location');
       if ([...sel.options].some((o) => o.value === state.location)) sel.value = state.location;
-      history.replaceState(null, '', `search.html${API.qs(state)}`);
+      history.replaceState(null, '', pageUrl());
       renderActiveFilters();
       UI.toast(`Showing services in ${data.understood.location}, from your search`);
     }
