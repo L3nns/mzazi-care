@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · Mzazi Care</title>
+<meta name="description" content="What Mzazi Care stores about you and how it is used.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="site-header"><div class="container nav">
+  <a class="brand" href="index.html">MZAZI CARE</a>
+  <nav class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="search.html">Browse services</a>
+  </nav>
+  <div class="nav-actions" id="nav-actions"></div>
+</div></header>
+<main class="container prose" style="padding-top:1rem">
+  <h1>Privacy</h1>
+  <p>Mzazi Care is a student capstone prototype. This page explains what it stores and why.
+    It describes the system as built; it is not a legal assessment under Kenya's Data Protection Act, 2019.</p>
+
+  <h2>What we store</h2>
+  <ul>
+    <li><strong>Your account:</strong> name, email address, a hashed password (never the password itself), and, if you give them, a phone number and area.</li>
+    <li><strong>Your preferences:</strong> the service categories you choose on your account page.</li>
+    <li><strong>Your activity:</strong> searches, providers you view, click, save or rate.</li>
+    <li><strong>Recommendations shown to you</strong>, with their scores, so the system can be evaluated.</li>
+  </ul>
+  <p>We do not ask for health records, and you should not enter medical details in searches or your profile.</p>
+
+  <h2>How it is used</h2>
+  <ul>
+    <li>To show you relevant services. Your activity shapes your own recommendations.</li>
+    <li>To suggest services to other parents with similar interests. Other users see only the suggested services, never who you are or what you did.</li>
+    <li>For administrator reports. These show totals, such as the most common searches, not individual histories.</li>
+  </ul>
+
+  <h2>Your controls</h2>
+  <ul>
+    <li>Edit your profile and preferences, and clear your search history, from <a href="account.html">My account</a>.</li>
+    <li>Sign out of every device from <a href="account.html?tab=password">Password and sign-in</a>. Changing your password does this too.</li>
+    <li>Delete your account, and everything recorded about it, from <a href="account.html?tab=data">Your data</a>. If you cannot sign in, ask a platform administrator to delete it for you.</li>
+  </ul>
+
+  <h2>How long we keep it</h2>
+  <ul>
+    <li>Your account, preferences and saved services: until you delete your account.</li>
+    <li>Searches: one year, then deleted automatically. You can clear them sooner.</li>
+    <li>Views, clicks, saves and ratings: two years. They are what recommendations learn from.</li>
+    <li>Recommendations shown to you, with their scores: 90 days.</li>
+    <li>Your "Not for me" answers: one year.</li>
+    <li>When an account is deleted, its data is removed from the database at once and from the live recommendation model when it next refreshes, within minutes. Stored copies of earlier models are deleted as newer ones are trained (the three newest are kept).</li>
+  </ul>
+
+  <h2>Provider documents</h2>
+  <p>Documents that providers submit for verification are stored privately and can only be opened by administrators. They are never shown on public pages.</p>
+
+  <h2>Not medical advice</h2>
+  <p>Mzazi Care helps you find services. It does not diagnose or recommend treatment, and a high rating or a verified badge is not proof of clinical competence. In an emergency, call <strong>999</strong> or <strong>112</strong>, or go to the nearest hospital.</p>
+</main>
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <p class="muted">Mzazi Care Discovery &amp; Catalog System · capstone prototype · seeded with synthetic data</p>
+  </div>
+</footer>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body></html>

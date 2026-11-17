@@ -19,3 +19,7 @@ sentence-transformers>=2.7
 
 # Tests
 pytest>=8.0
+# Newer starlette (pulled in by fastapi) needs this for TestClient; our
+# pinned-looking local install predates the split, so it works without it,
+# but a fresh CI install resolves a starlette that requires it explicitly.
+httpx2>=2.0

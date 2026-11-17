@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         ? `<ul class="service-list">${tags.map((t) => `<li>${UI.esc(t.replace(/-/g, ' '))}</li>`).join('')}</ul>`
         : '<p class="muted">No services listed.</p>',
       location: `<p><strong>${UI.esc(p.location || 'Not stated')}</strong>, Nairobi</p>
+        ${(p.service_areas || []).length > 1 ? `<p>Also serves: ${p.service_areas.filter((a) => a !== p.location).map(UI.esc).join(', ')}</p>` : ''}
         ${p.location ? `<p><a href="search.html?location=${encodeURIComponent(p.location)}">Other verified services in ${UI.esc(p.location)}</a></p>` : ''}`,
     };
 
@@ -135,8 +136,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!e.target.value) return;
       if (!API.getToken()) { location.href = 'account.html?tab=login'; return; }
       try {
-        await API.interact({ provider_id: id, interaction_type: 'rating', rating_value: Number(e.target.value) });
-        UI.toast(`Thank you — rated ${e.target.value} star${e.target.value === '1' ? '' : 's'}`);
+        const out = await API.interact({ provider_id: id, interaction_type: 'rating', rating_value: Number(e.target.value) });
+        const stars = `${e.target.value} star${e.target.value === '1' ? '' : 's'}`;
+        UI.toast(out.updated ? `Your rating is now ${stars}` : `Thank you — rated ${stars}`);
       } catch (err) { UI.toast(err.message, true); }
     });
   } catch (err) {

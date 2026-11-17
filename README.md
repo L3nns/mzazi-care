@@ -25,12 +25,19 @@ The four-layer architecture from Figure 4.1, built end to end:
 The recommendation engine is the weighted hybrid of Section 4.8:
 
 ```
-score(u, s) = α · content(u, s) + (1 − α) · collaborative(u, s)
+blend(u, s) = α · content(u, s) + (1 − α) · collaborative(u, s)
+score(u, s) = (1 − γ − δ) · blend(u, s) + γ · location(u, s) + δ · quality(s)
 ```
 
 with content-based scoring from Sentence-BERT embeddings (TF-IDF+SVD as the
 fallback) and collaborative scoring from k-Nearest Neighbors over the
-user-item matrix. α starts at 1 and is reviewed at every retrain.
+user-item matrix. α, γ (distance from the parent's area) and δ (popularity and
+smoothed rating) are chosen on a validation split at every retrain; on the
+seeded data that gives α = 0.4 and γ = δ = 0.
+
+Free-text search uses the same engine: a parent's words are matched by
+meaning, in English or Kiswahili, and a place named in the query becomes a
+visible area filter. Keyword SQL remains as the automatic fallback.
 
 ## Run it
 
@@ -45,15 +52,19 @@ Then open **http://localhost:4000**.
 |---|---|
 | Web application | http://localhost:4000 |
 | API health | http://localhost:4000/api/health |
-| Recommendation service docs | http://localhost:8000/docs |
+| API description (OpenAPI 3) | http://localhost:4000/api/openapi.yaml |
+| Recommendation service docs | http://localhost:8000/docs (host only) |
 | MySQL | localhost:3307 |
 
 The database is created and seeded automatically on first start with 120
-providers, 240 users and 4,667 interactions.
+providers, 240 users and 5,012 interactions. The behavioural tables
+(preferences, searches, interactions, saved services and the train/test split)
+are synthetic and come from `database/generate_seed.py`; rerun it to redraw them.
 
-> **Before anything else, change `JWT_SECRET` and `ML_SERVICE_TOKEN` in `.env`.**
-> Generate each with `openssl rand -hex 32`. The defaults in
-> `docker-compose.yml` exist so the stack boots for a demo; they are not safe.
+> **Set `JWT_SECRET`, `ML_SERVICE_TOKEN` and `MFA_ENCRYPTION_KEY` in `.env`
+> before the first start.** Generate each with `openssl rand -hex 32`. Compose
+> refuses to start without the first two. For a real deployment (TLS, backups,
+> logs, monitoring) follow **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
 ### Without Docker
 
@@ -103,20 +114,20 @@ re-checked on every admin request, so a demotion takes effect at once.
 | Proposal | Where it lives |
 |---|---|
 | FR-01, FR-02 register, profile, preferences | `routes/auth.js`, `account.js` (profile, preferences, saved, search history, password) |
-| FR-03 to FR-05 browse, search, filter by category, service type, location; sort | `routes/services.js`, `services/catalog.js`, `search.js` |
+| FR-03 to FR-05 browse, search, filter by category, service type, location; sort | `routes/services.js` (search by meaning through the engine, keyword fallback), `services/areas.js` (place names, nearby areas), `search.js` |
 | FR-06 provider profile | `provider.js` — overview, qualifications, services offered, location tabs; rating summary; share |
 | FR-07 save, rate | `routes/interactions.js`, `routes/saved.js` |
 | FR-08 to FR-11 hybrid engine | `ml-service/engine.py` |
 | FR-12 capture interactions | views, clicks (including clicks on recommendations), saves, ratings and searches |
 | FR-13 RBAC | `middleware/auth.js` — the role is re-read from the database on every admin request |
 | FR-14 add, update, delete listings | Admin → Provider listings, Add listing |
-| FR-15 evidence and verification | Admin → listing form: upload evidence (PDF/JPG/PNG), approve, reject **with a reason** |
+| FR-15 evidence and verification | `services/verification.js`: eight-state workflow with recorded history; typed, versioned documents with expiry, reviewed one by one; a listing is verified only with every document its category requires; lapsed documents expire the listing |
 | FR-16 categories and sub-categories | Admin → Categories |
 | FR-17 logs and summary reports | Admin → Activity log, Reports (engagement, searches, recommendation output, data quality) |
-| FR-18 re-index, retrain | Admin → Dashboard → Model status |
+| FR-18 re-index, retrain | Admin → Dashboard → Model: retrain builds an evaluated candidate, promoted only if it is no worse; promote and roll back by hand |
 | Table 4.3 alternative flow | below the similarity threshold the engine returns popular, highly rated services in the selected category |
 | Section 4.8.3 diversity | while collaborative is unavailable, 20% of the list is kept for highly rated services in related categories |
-| Figure 4.5 no empty result set | zero keyword matches return the closest services (semantic) or popular ones |
+| Figure 4.5 no empty result set | nothing in the area: nearby areas; nothing at all: closest or popular services; a weak best match is labelled as such |
 | Figure 4.6 failed attempts logged | failed sign-ins to administrator accounts go to the audit trail |
 | Figure 4.15 mobile | filters collapse behind a control; recommendations move above results |
 
@@ -136,7 +147,8 @@ built.
    young platform, using a density schedule. Once at least 20 users have a
    held-out interaction, each retrain instead picks the α with the best
    held-out recall@10, which is how "reviewed at each retraining cycle"
-   (4.8.3) is implemented. On the seeded data the review picks 0.8.
+   (4.8.3) is implemented. The review uses a validation split cut from the
+   training period, never the test split. On the seeded data it picks 0.4.
 3. **Stop words are kept for the sentence encoder.** Section 4.8.1 lists stop
    word removal in preprocessing. TF-IDF removes them; a transformer needs
    them to read the sentence, so they are left in for SBERT.
@@ -147,6 +159,11 @@ built.
    are public; supporting evidence (Figure 4.14) is administrator-only.
 6. **The seed has 120 providers, not "approximately forty"** (Section 3.2.1),
    across the same twenty categories.
+7. **Free-text search is matched by meaning, not keywords.** Keyword SQL needs
+   every word to appear; on the labelled benchmark it returned nothing for 69%
+   of answerable questions (nDCG@10 0.27). The live route through the engine
+   scores 0.81 (+0.54, 95% CI [0.42, 0.65]). Keyword SQL is kept as the
+   fallback when the engine is unavailable.
 
 ---
 
@@ -169,10 +186,11 @@ Three mechanisms close the gap, all in `ml-service/`:
 3. **Query boost.** In a query, a thesaurus concept that is rare in the
    catalogue (*nanny*) is weighted up against a generic one (*child*).
 
-Keyword search applies the same variant rules, prefix-matches every term, and
-drops filler words, so *"looking for day-care near me"* finds daycare listings.
-When nothing matches, the results page shows the engine's closest services
-instead of an empty page.
+Search sends the parent's words to the engine and ranks the listings it
+matches, best first; a listing whose name contains the words always appears.
+When nothing clearly matches, the closest services are shown under a notice
+saying so. The keyword fallback applies the same variant rules, prefix-matches
+every term and drops filler words.
 
 ### Measured: which encoder
 
@@ -193,6 +211,13 @@ Two conclusions: the sentence encoder is what makes English work, and the
 thesaurus is what makes Kiswahili work — without it, neither model handles
 Kiswahili at all. The query set is small and written by the developer; it is
 indicative, and should be replaced with real queries from stakeholder testing.
+
+The fuller study is in **[docs/research/](docs/research/FINDINGS.md)**: 113
+labelled queries (English, Kiswahili, mixed, place and out-of-scope, split into
+dev and test in advance), nine search systems including the live route,
+recommendation baselines, a diversity experiment, bootstrap confidence
+intervals and paired significance tests. Regenerate it with
+`python -m research.run_all` (ml-service/).
 
 ---
 
@@ -215,12 +240,12 @@ and re-indexes automatically whenever a listing is verified, edited or removed.
 
 ### The result that matters
 
-On the seeded temporal split (`train.py`, sentence encoder, α=0.4):
+On the seeded temporal split (`train.py --encoder sbert`, α=0.4):
 
 | | content-based | collaborative | hybrid |
 |---|---|---|---|
-| recall@10, all providers | 0.24 | 0.26 | 0.25 |
-| **recall@10, newest providers** | **0.49** | **0.05** | — |
+| recall@10, all providers | 0.79 | 0.75 | 0.83 |
+| **recall@10, the 7 newest providers** | **0.92** | **0.17** | — |
 
 A provider that has just been verified has **no column in the user-item
 matrix**. No user has interacted with it, so no neighbour can have preferred
@@ -228,16 +253,18 @@ it, so k-NN can never surface it — however good it is. Every new listing start
 in exactly that state. That is the argument for the hybrid, and it is why the
 verification endpoint triggers an immediate re-index.
 
-**Two cautions for Chapter Five.**
+**Cautions for Chapter Five** (details in docs/research/FINDINGS.md):
 
-- On the synthetic data the content upgrade over TF-IDF is small on recall,
-  because the seeded descriptions are generated from per-category vocabulary.
-  The difference shows on real wording, which is what the query benchmark
-  measures. Do not claim a recall gain you cannot evidence.
-- The admin dashboard's recall@10 (about 0.62) is a **different protocol**:
-  leave-last-out on the live data, one held-out provider per user, so recall
-  equals hit rate. It is labelled as such and must not be compared with the
-  0.25 above.
+- The hybrid's lead over content-only (+0.04 recall) is **not statistically
+  significant** on this data; its lead over collaborative-only is.
+- For recommendations, the TF-IDF encoder does as well as SBERT (better nDCG).
+  SBERT's measured advantage is in search, for questions worded unlike the
+  listings. Do not claim a recall gain you cannot evidence.
+- The interactions are synthetic, and the generator favours content-based
+  methods.
+- The admin dashboard's metrics use a **different protocol** on the live data
+  (each user's last interaction held out) and must not be compared with the
+  table above.
 
 ---
 
@@ -249,17 +276,20 @@ mzazi-care/
 ├── .env.example                copy to .env and fill in
 ├── database/
 │   ├── schema.sql              DDL matching the ERD (Figure 4.8)
-│   ├── seed_data.sql           120 providers, 240 users, 4,667 interactions
+│   ├── seed_data.sql           120 providers, 240 users, 5,012 interactions
 │   └── seed/*.csv              same data as CSV (the ML service can read these)
 ├── ml-service/
-│   ├── app.py                  FastAPI: /recommend /similar /reindex /retrain /model
+│   ├── app.py                  FastAPI: /recommend /similar /reindex /retrain /models
 │   ├── engine.py               HybridRecommender - the whole of Section 4.8
+│   ├── registry.py             model versions: candidate, production, rollback
+│   ├── logs.py                 structured logs with request ids
 │   ├── encoders.py             pluggable content encoder (SBERT | TF-IDF+SVD)
 │   ├── synonyms.py             thesaurus + preprocessing, EN + SW
 │   ├── db.py                   MySQL or CSV data source, live user history
 │   ├── train.py                train, tune, evaluate, compare encoders
 │   ├── benchmark_queries.py    query-level encoder benchmark
-│   └── tests/test_engine.py    50 tests
+│   ├── research/               labelled benchmark and experiments (Phase 6)
+│   └── tests/                  engine, ranking, API and research tests
 ├── backend/
 │   ├── server.js               helmet, CORS, rate limits, static front end
 │   ├── config/db.js            the single parameterised query seam + transactions
@@ -267,8 +297,13 @@ mzazi-care/
 │   ├── middleware/auth.js      bcrypt, JWT, requireAuth / requireAdmin
 │   ├── routes/                 auth, categories, services, interactions,
 │   │                           saved, recommendations, admin
-│   ├── services/               mlClient, catalog (search SQL), media (uploads)
-│   └── tests/                  38 API tests + an integration smoke test
+│   ├── services/               mlClient, catalog, areas, verification, expiry,
+│   │                           totp, media, logger
+│   ├── scripts/served-search.js  runs the benchmark queries through the live route
+│   └── tests/                  API, spec, logging, areas, verification + smoke test
+├── e2e/                        browser tests (Playwright)
+├── docs/                       DEPLOYMENT.md, api/openapi.yaml, research/
+├── .github/workflows/ci.yml    backend, ML and full-stack jobs
 └── frontend/
     ├── index.html              landing and search         (Figure 4.9)
     ├── search.html             results, filters, recs     (Figure 4.10)
@@ -279,60 +314,63 @@ mzazi-care/
 
 ## API
 
-| Method | Endpoint | Access |
+The full description is **[docs/api/openapi.yaml](docs/api/openapi.yaml)**
+(also served at `/api/openapi.yaml`). A test fails if a route is added or
+removed without updating it. In short:
+
+| Area | Endpoints | Access |
 |---|---|---|
-| POST | `/api/auth/register`, `/api/auth/login` | public |
-| GET/PUT | `/api/auth/me`, `/api/auth/me/preferences` | authenticated |
-| PUT | `/api/auth/me/password` | authenticated |
-| GET/DELETE | `/api/auth/me/searches` | authenticated |
-| GET | `/api/categories` | public |
-| GET | `/api/services` (`q`, `type`, `category`, `location`, `sort`, `page`) | public |
-| GET | `/api/services/:id`, `/api/services/locations`, `/api/services/media/:id` | public |
-| POST | `/api/interactions`; GET `/api/interactions/me` | authenticated |
-| GET/DELETE | `/api/saved`, `/api/saved/:providerId` | authenticated |
-| GET | `/api/recommendations` | optional auth |
-| GET/POST/PUT/DELETE | `/api/admin/providers…` | administrator |
-| PUT | `/api/admin/providers/:id/verify` (reason required to reject) | administrator |
-| POST/GET/DELETE | `/api/admin/providers/:id/media`, `/api/admin/media/:id` | administrator |
-| GET/POST/PUT/DELETE | `/api/admin/categories…` | administrator |
-| GET, PUT | `/api/admin/users`, `/api/admin/users/:id/role` | administrator |
-| GET | `/api/admin/stats`, `/api/admin/reports`, `/api/admin/logs` | administrator |
-| POST | `/api/admin/model/reindex`, `/api/admin/model/retrain` | administrator |
+| Accounts | `/api/auth/*`: register, login, two-step sign-in, profile, preferences, password, sign out everywhere | public / signed in |
+| Catalogue | `/api/categories`, `/api/services` (search), `/api/services/:id`, `/api/services/locations` | public |
+| Activity | `/api/interactions`, `/api/saved` | signed in |
+| Recommendations | `/api/recommendations`, `/api/recommendations/feedback` | optional / signed in |
+| Administration | `/api/admin/*`: listings, verification, documents, categories, areas, users, reports, logs, model versions | administrator |
+
+Every response carries an `X-Request-Id`, which also appears in both services'
+logs.
 
 ## Tests
 
 ```bash
-cd ml-service && venv/Scripts/python -m pytest -q   # 49 passed, 1 skipped
-cd backend && npm test                              # 38 passed
+cd backend && npm test                              # 91 passed
+cd ml-service && venv/Scripts/python -m pytest -q   # 110 passed, 1 skipped
 # Express against the real ML service (database stubbed):
 ML_SERVICE_URL=http://127.0.0.1:8000 ML_SERVICE_TOKEN=<your token> node tests/integration.smoke.js
+# In a browser, against a running stack:
+cd e2e && npm install && npx playwright install chromium
+E2E_BASE_URL=http://localhost:4000 npx playwright test   # 9 passed, 1 skipped
 ```
 
-The Python suite covers the engine:
-- only verified providers are recommendable
-- semantic matching and spelling variants
-- every cold-start path: launch day, the similarity threshold, searches and declared preferences, live history for a new user
-- the related-category reservation and parent-category filters
-- the α schedule and review, and the holdout split
-- the encoder wrapper and query boost
+The skipped browser test creates an account; it runs with `E2E_WRITE=1` (CI
+does, on a throwaway database). The skipped Python test only runs when
+sentence-transformers is absent.
 
-The skipped test only runs when sentence-transformers is absent.
+- **Python suite.** The engine and its cold-start paths; location, quality
+  and explanations; MMR; the metrics; the model registry and promotion gate;
+  the API, including request ids; and the research tooling (statistics, metric
+  arithmetic, the place-name parser, the integrity of the labelled queries).
+- **Node suite.** Routing, authentication, sessions and two-step sign-in;
+  RBAC; validation and SQL binding; search by meaning and the keyword fallback;
+  places and nearby areas; the verification workflow and documents;
+  recommendation feedback; model versions; uploads; logging that never
+  records search text; and that `openapi.yaml` matches the routes.
+- **Browser tests.** A paraphrased question, Kiswahili with a place, the
+  nearby-areas fallback, an out-of-scope request, the weak-match notice,
+  opening a provider, and a new parent's first session ending with deleting
+  the account.
 
-The Node suite covers:
-- routing and authentication
-- RBAC, including demotion
-- validation and SQL parameter binding
-- keyword search SQL
-- empty-result suggestions
-- rejection reasons and audit logging
-- the last-administrator guard
-- password change
-- content-checked uploads, and that evidence is never public
+**CI** (`.github/workflows/ci.yml`) runs:
+
+1. both suites (Python on TF-IDF);
+2. the research scripts, as a check that they still run;
+3. a full-stack job: MySQL seeded from `database/`, the ML service with the
+   sentence encoder, the API, the integration smoke test and the browser tests.
 
 ## Security (Section 4.11)
 
 - Passwords are bcrypt-hashed (12 rounds).
-- Sessions are signed JWTs.
+- Sessions are signed JWTs, revoked on password change, role change and "sign out of all devices".
+- Optional two-step sign-in (TOTP); secrets are encrypted at rest and codes cannot be replayed.
 - The administrator role is re-checked against the database on every admin request.
 - All input is validated with express-validator, and every query is parameterised through one `query()` helper.
 - Multi-step changes and their audit entries commit in one transaction.
@@ -340,6 +378,10 @@ The Node suite covers:
 - Login and registration have their own rate limits, and failed sign-ins to administrator accounts are logged.
 - Uploaded files are type-checked by their bytes, stored under random names, and evidence is only ever served to administrators.
 - The ML service is reachable only from Express, behind a shared token.
+- Logs carry request ids but never search text, request bodies, passwords or tokens.
+- Parents can delete their account and everything recorded about them; old searches, activity and model files are deleted on a schedule (docs/DEPLOYMENT.md, section 10).
+- One rating per parent per provider, enforced by the database; repeat views on the same day are not counted.
+- Behind a reverse proxy, set `TRUST_PROXY` so rate limits apply per visitor (docs/DEPLOYMENT.md).
 
 The collaborative component derives suggestions from other users' behaviour
 but exposes only the resulting services, never the neighbours' identities or
@@ -349,15 +391,16 @@ their interactions.
 
 ## Status
 
-Verified on a Windows machine against MySQL 8.0 with the sentence encoder
-running:
-- both test suites
-- an end-to-end run of 38 checks against the live stack and real database, covering search, recommendations, a new parent's first session, and the full verification flow with evidence upload
-- every page rendered in headless Chrome at 1280px and at a true 390px width, with no script errors and no horizontal overflow
+Verified on 28 October 2026, on a Windows machine against MySQL 8.0 with the
+sentence encoder running:
 
-The same end-to-end run also passes against the Docker stack
-(`docker compose up --build`): the containers seed their own database,
-train on start, and retrain from the dashboard.
+- both test suites (numbers above);
+- the browser tests against a live backend, ML service and database;
+- the labelled search benchmark through the live route (docs/research/RESULTS.md).
+
+Not re-verified after the Phase 7 changes: the Docker stack, and the GitHub
+Actions workflow, which has not yet run on GitHub. Earlier sessions ran the
+Docker stack end to end.
 
 The Docker database (port 3307) is separate from a locally installed MySQL
 (port 3306). Accounts created in one do not exist in the other, so promote

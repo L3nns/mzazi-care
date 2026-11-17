@@ -2,7 +2,14 @@
 """
 The hybrid recommendation engine (Section 4.8 of the proposal).
 
-    score(u, s) = alpha * content(u, s) + (1 - alpha) * collaborative(u, s)
+    blend(u, s) = alpha * content(u, s) + (1 - alpha) * collaborative(u, s)
+    score(u, s) = (1 - gamma - delta) * blend(u, s)
+                  + gamma * location(u, s) + delta * quality(s)
+
+gamma and delta default to 0 (the original two-part hybrid). They are chosen
+on a validation split cut from the training period (tune_ranking), never on
+the test interactions. location() is exp(-d / scale) for the distance d in km
+between the parent's area centre and the nearest area the provider serves.
 
 Content is cosine similarity between a user preference vector and the encoded
 service catalogue; collaborative is k-Nearest Neighbors over the user-item
@@ -58,6 +65,19 @@ class EngineConfig:
     min_similarity: float | None = None  # below this nothing "matches" (Table 4.3);
                                          # None: the encoder's own default
     diversity_share: float = 0.2   # share of the list reserved while content-only
+    location_weight: float = 0.0   # gamma: distance from the parent's area
+    quality_weight: float = 0.0    # delta: popularity + smoothed rating
+    location_scale_km: float = 5.0  # distance at which location() falls to 1/e
+    mmr_lambda: float | None = None  # diversity re-ranking; None/1.0 = off
+    # With a search query, a provider must reach this share of the best
+    # content match in the whole catalogue to be shown at all, so a hard area
+    # filter cannot fill the list with unrelated services. 0.85 is the best
+    # dev-split value on the labelled search benchmark (research/, finding S4
+    # in docs/research/FINDINGS.md): it lifts list precision from 0.49 to 0.77
+    # at a cost in recall. 0 switches it off; None uses the encoder's own
+    # default (0.85 for sentence embeddings, off for TF-IDF).
+    query_relevance_ratio: float | None = None
+    ranking_source: str = "default (location and quality off)"
     top_n: int = 10
     encoder: str = "auto"
     trained_at: str = ""
@@ -86,6 +106,13 @@ def _minmax(v: np.ndarray) -> np.ndarray:
     return np.zeros_like(v, dtype=float) if hi - lo == 0 else (v - lo) / (hi - lo)
 
 
+def haversine_km(a, b) -> float:
+    """Great-circle distance between (lat, lng) pairs, in km."""
+    lat1, lng1, lat2, lng2 = map(np.radians, (a[0], a[1], b[0], b[1]))
+    h = np.sin((lat2 - lat1) / 2) ** 2 +         np.cos(lat1) * np.cos(lat2) * np.sin((lng2 - lng1) / 2) ** 2
+    return float(2 * 6371.0 * np.arcsin(np.sqrt(h)))
+
+
 def _unit(v: np.ndarray | None) -> np.ndarray | None:
     if v is None:
         return None
@@ -104,7 +131,10 @@ class HybridRecommender:
     def fit(self, providers: pd.DataFrame, interactions: pd.DataFrame,
             categories: pd.DataFrame | None = None,
             searches: pd.DataFrame | None = None,
-            preferences: pd.DataFrame | None = None) -> "HybridRecommender":
+            preferences: pd.DataFrame | None = None,
+            areas: pd.DataFrame | None = None,
+            provider_areas: pd.DataFrame | None = None,
+            users: pd.DataFrame | None = None) -> "HybridRecommender":
         """
         providers    : provider_id, provider_name, category_id, service_description,
                        service_tags, location, verification_status
@@ -112,6 +142,9 @@ class HybridRecommender:
                        [, rating_value]
         searches     : user_id, query_text [, searched_at]          (optional)
         preferences  : user_id, category_id                         (optional)
+        areas        : area_name, latitude, longitude               (optional)
+        provider_areas: provider_id, area_name - areas each serves  (optional)
+        users        : user_id, location - the parent's home area   (optional)
         Only VERIFIED providers become recommendable (Table 4.4).
         """
         t0 = time.time()
@@ -129,6 +162,7 @@ class HybridRecommender:
         self.item_cats = self.providers.category_id.to_numpy()
 
         self._index_categories(categories)
+        self._fit_areas(areas, provider_areas, users)
 
         # ---- content side ------------------------------------------------
         text = (
@@ -235,6 +269,58 @@ class HybridRecommender:
             if parent is not None:
                 self.cat_children.setdefault(parent, set()).add(cid)
 
+    def _fit_areas(self, areas, provider_areas, users):
+        """Area centres, the areas each provider serves (always including its
+        own location) and each parent's home area, all keyed lower-case."""
+        self.area_coords = {}
+        if areas is not None and len(areas):
+            for r in areas.itertuples(index=False):
+                lat, lng = getattr(r, "latitude", None), getattr(r, "longitude", None)
+                if lat is not None and lng is not None and not pd.isna(lat) and not pd.isna(lng):
+                    self.area_coords[str(r.area_name).strip().lower()] = (float(lat), float(lng))
+        served = {p: set() for p in self.provider_ids}
+        for pid, loc in zip(self.providers.provider_id, self.providers.location):
+            if isinstance(loc, str) and loc.strip():
+                served[int(pid)].add(loc.strip().lower())
+        if provider_areas is not None and len(provider_areas):
+            for r in provider_areas.itertuples(index=False):
+                if int(r.provider_id) in served and isinstance(r.area_name, str):
+                    served[int(r.provider_id)].add(r.area_name.strip().lower())
+        self.item_areas = [served[p] for p in self.provider_ids]
+        self.user_home = {}
+        if users is not None and len(users) and "location" in users:
+            for uid, loc in zip(users.user_id, users.location):
+                if isinstance(loc, str) and loc.strip():
+                    self.user_home[int(uid)] = loc.strip().lower()
+        self._loc_cache = {}
+
+    def _location_scores(self, area):
+        """(scores, distances_km) for a reference area, or (None, None) when the
+        area is unknown. A provider serving the area itself is at distance 0;
+        one with no area centre known is treated as not nearby."""
+        if not area:
+            return None, None
+        key = str(area).strip().lower()
+        if key in self._loc_cache:
+            return self._loc_cache[key]
+        origin = self.area_coords.get(key)
+        known = origin is not None or any(key in a for a in self.item_areas)
+        if not known:
+            self._loc_cache[key] = (None, None)
+            return None, None
+        dist = np.full(self.n_items, np.nan)
+        for i, served in enumerate(self.item_areas):
+            if key in served:
+                dist[i] = 0.0
+            elif origin is not None:
+                ds = [haversine_km(origin, self.area_coords[a]) for a in served if a in self.area_coords]
+                if ds:
+                    dist[i] = min(ds)
+        scale = max(self.cfg.location_scale_km, 1e-6)
+        scores = np.where(np.isnan(dist), 0.0, np.exp(-np.nan_to_num(dist, nan=0.0) / scale))
+        self._loc_cache[key] = (scores, dist)
+        return scores, dist
+
     def _fit_quality(self, inter: pd.DataFrame):
         """'Popular and highly rated' (Table 4.3): half popularity, half a
         Bayesian-smoothed mean rating, so one 5-star review cannot top the list."""
@@ -310,6 +396,12 @@ class HybridRecommender:
             return float(self.cfg.min_similarity)
         return float(getattr(self.encoder, "default_min_similarity", 0.10))
 
+    @property
+    def relevance_ratio(self) -> float:
+        if self.cfg.query_relevance_ratio is not None:
+            return float(self.cfg.query_relevance_ratio)
+        return float(getattr(self.encoder, "default_relevance_ratio", 0.0))
+
     def _expand_category(self, category_id) -> set:
         """A parent category ("service type") stands for all its children."""
         cid = int(category_id)
@@ -382,19 +474,31 @@ class HybridRecommender:
     # ------------------------------------------------------------ recommend
     def recommend(self, user_id=None, query=None, top_n=None, alpha=None,
                   category_id=None, location=None, exclude_seen=True,
-                  exclude_ids=None, history=None):
+                  exclude_ids=None, history=None, area=None, overrides=None):
         """
-        history: live signals for this user, read at request time (Figure 4.3,
-                 step 7) - {"interactions": [(provider_id, weight), ...],
-                 "queries": [...], "preferred_categories": [...]}. Without it
-                 the engine uses what it saw at fit time.
+        history  : live signals for this user, read at request time (Figure 4.3,
+                   step 7) - {"interactions": [(provider_id, weight), ...],
+                   "queries": [...], "preferred_categories": [...]}. Without it
+                   the engine uses what it saw at fit time.
+        location : HARD filter - only providers serving this area.
+        area     : SOFT ranking feature - the area distance is measured from.
+                   Defaults to `location`, then to the user's home area.
+        overrides: {"location_weight", "quality_weight", "mmr_lambda",
+                   "diversity_share"} for evaluation, tuning and search (which
+                   wants matches only), without touching the config.
         """
         if not self.fitted:
             raise RuntimeError("engine is not fitted")
         top_n = top_n or self.cfg.top_n
+        ov = overrides or {}
+        g_w = float(ov.get("location_weight", self.cfg.location_weight))
+        q_w = float(ov.get("quality_weight", self.cfg.quality_weight))
+        mmr = ov.get("mmr_lambda", self.cfg.mmr_lambda)
+        share = float(ov.get("diversity_share", self.cfg.diversity_share))
 
         cs, has_content = self._content_scores(user_id, query, history)
         fs, has_collab = self._collaborative_scores(user_id, history)
+        used_profile = self._profile_for(user_id, history) is not None
 
         # ---- which services may appear at all
         mask = np.zeros(self.n_items, dtype=bool)
@@ -409,10 +513,18 @@ class HybridRecommender:
                 mask[self.p_index[int(pid)]] = True
         if category_id is not None:
             mask |= ~np.isin(self.item_cats, list(self._expand_category(category_id)))
+        # A search states what is wanted: no MATCH far below the best one
+        # anywhere in the catalogue may appear, however it scores otherwise.
+        # (The related-category slot below is exempt; it is labelled as such.)
+        hard = mask.copy()
+        ratio = self.relevance_ratio
+        if query and has_content and ratio > 0:
+            mask |= cs < ratio * float(cs.max())
         if location:
-            mask |= (self.providers.location.astype(str).str.lower().to_numpy()
-                     != str(location).lower())
+            key = str(location).strip().lower()
+            mask |= np.array([key not in a for a in self.item_areas])
         valid = ~mask
+        valid_hard = ~hard
 
         # Table 4.3: if no candidate clears the similarity threshold the content
         # signal is not a match at all, and must not rank anything.
@@ -426,27 +538,49 @@ class HybridRecommender:
         if not has_content:
             a = 0.0
 
+        ref_area = area or location or (self.user_home.get(user_id) if user_id is not None else None)
+        loc, dist = self._location_scores(ref_area)
+        if loc is None:
+            g_w = 0.0
+            loc = np.zeros(self.n_items)
+
         cs_n, fs_n = _minmax(cs), _minmax(fs)
-        score = a * cs_n + (1 - a) * fs_n
         strategy = "hybrid"
         if not has_content and not has_collab:
-            score, strategy = self.quality.copy(), "popularity_fallback"
-        elif a >= 1.0:
-            strategy = "content_only"
-        elif a <= 0.0:
-            strategy = "collaborative_only"
+            # Popular and highly rated, nudged towards the parent's area if known.
+            base, strategy = self.quality.copy(), "popularity_fallback"
+            score = (1 - g_w) * base + g_w * loc
+        else:
+            if a >= 1.0:
+                strategy = "content_only"
+            elif a <= 0.0:
+                strategy = "collaborative_only"
+            base = a * cs_n + (1 - a) * fs_n
+            score = (1 - g_w - q_w) * base + g_w * loc + q_w * self.quality
 
         score = score.astype(float).copy()
         score[mask] = -np.inf
         order = [int(i) for i in np.argsort(-score, kind="stable") if np.isfinite(score[i])]
+        if mmr is not None and float(mmr) < 1.0:
+            order = self._mmr(order, score, top_n, float(mmr))
 
         reserved = set()
         if strategy == "content_only" and category_id is None:
-            order, reserved = self._reserve_related(order, top_n, valid)
+            order, reserved = self._reserve_related(order, top_n, valid_hard, share)
+
+        prefs = set(history.get("preferred_categories", ())) if history is not None \
+            else set(self.user_prefs.get(user_id, ()))
+        pref_cats = set().union(*(self._expand_category(c) for c in prefs)) if prefs else set()
+        ctx = dict(query=query, strategy=strategy, has_collab=has_collab, used_profile=used_profile,
+                   pref_cats=pref_cats, area=ref_area, explicit_area=bool(area or location))
 
         results = []
         for rank, i in enumerate(order[:top_n], start=1):
             row = self.providers.iloc[i]
+            d = None if dist is None or np.isnan(dist[i]) else round(float(dist[i]), 1)
+            basis = ("related_highly_rated" if i in reserved
+                     else "popular" if strategy == "popularity_fallback" else "match")
+            final = round(float(np.clip(score[i], 0.0, 1.0)), 4)
             results.append(dict(
                 rank_position=rank,
                 provider_id=int(row.provider_id),
@@ -456,22 +590,87 @@ class HybridRecommender:
                 location=row.location,
                 content_score=round(float(cs_n[i]), 4),
                 collaborative_score=round(float(fs_n[i]), 4),
-                hybrid_score=round(float(np.clip(score[i], 0.0, 1.0)), 4),
+                hybrid_score=final,
+                scores=dict(content=round(float(cs_n[i]), 4),
+                            collaborative=round(float(fs_n[i]), 4),
+                            location=round(float(loc[i]), 4) if ref_area else None,
+                            quality=round(float(self.quality[i]), 4),
+                            final=final),
+                distance_km=d,
                 avg_rating=float(self.rating_mean[i]) if self.rating_count[i] else None,
                 rating_count=int(self.rating_count[i]),
-                basis=("related_highly_rated" if i in reserved
-                       else "popular" if strategy == "popularity_fallback"
-                       else "match"),
+                basis=basis,
+                reasons=self._reasons(i, cs_n[i], fs_n[i], d, basis, ctx),
             ))
+        # How well the query itself matches the best listing anywhere (raw
+        # cosine). Search labels a weak best match instead of hiding it: no
+        # single cut-off separates real questions from out-of-scope ones
+        # (docs/research/FINDINGS.md, S5).
+        q_sim = round(float((self.item_vectors @ self.encoder.encode_one(query)).max()), 4)             if query else None
         return dict(user_id=user_id, query=query, strategy=strategy,
-                    alpha_used=round(float(a), 2), count=len(results),
-                    results=results)
+                    query_similarity=q_sim,
+                    alpha_used=round(float(a), 2),
+                    weights=dict(location=round(g_w, 3), quality=round(q_w, 3),
+                                 mmr_lambda=None if mmr is None else float(mmr)),
+                    area=ref_area, count=len(results), results=results)
 
-    def _reserve_related(self, order, top_n, valid):
+    # Thresholds on the min-max scaled scores above which a component is
+    # strong enough to be named as a reason.
+    STRONG = 0.6
+
+    def _reasons(self, i, content, collab, dist, basis, ctx):
+        """Why this provider is in the list, from the actual score components
+        and the provider record. Never a reason the data does not support."""
+        out = []
+        cat = int(self.item_cats[i])
+        if basis == "related_highly_rated":
+            out.append(("related_highly_rated", "Highly rated in a related category"))
+        elif basis == "popular":
+            out.append(("popular", "Popular and well rated with parents"))
+        if ctx["query"] and content >= self.STRONG and basis == "match":
+            out.append(("matches_search", "Matches your search"))
+        elif not ctx["query"] and ctx["used_profile"] and content >= self.STRONG and basis == "match":
+            out.append(("matches_activity", "Similar to services you looked at or saved"))
+        if cat in ctx["pref_cats"]:
+            out.append(("matches_preferences", "In a category you chose"))
+        if ctx["has_collab"] and collab >= self.STRONG:
+            out.append(("similar_parents", "Parents with similar activity used this service"))
+        if ctx["area"] is not None and dist is not None:
+            name = str(ctx["area"]).title() if ctx["area"].islower() else ctx["area"]
+            if dist == 0:
+                out.append(("serves_area", f"Serves {name}"))
+            elif dist <= 10:
+                out.append(("nearby", f"About {dist:.0f} km from {name} (area centres)"))
+        if self.rating_count[i] >= 3 and self.rating_mean[i] >= 4.0:
+            out.append(("well_rated",
+                        f"Rated {self.rating_mean[i]:.1f} from {int(self.rating_count[i])} ratings"))
+        return [dict(code=c, text=t) for c, t in out]
+
+    def _mmr(self, order, score, top_n, lam):
+        """Maximal Marginal Relevance over the leading candidates: each pick
+        trades its score against its similarity to what is already chosen.
+        lam = 1 is the plain ranking; lower values favour variety."""
+        pool = order[: max(top_n * 4, top_n)]
+        if len(pool) <= 1:
+            return order
+        rel = _minmax(np.array([score[i] for i in pool]))
+        vecs = self.item_vectors[pool]
+        sims = vecs @ vecs.T
+        chosen, left = [0], list(range(1, len(pool)))
+        while left and len(chosen) < top_n:
+            best = max(left, key=lambda j: lam * rel[j] - (1 - lam) * max(sims[j, c] for c in chosen))
+            chosen.append(best)
+            left.remove(best)
+        picked = [pool[j] for j in chosen]
+        rest = [i for i in order if i not in set(picked)]
+        return picked + rest
+
+    def _reserve_related(self, order, top_n, valid, share=None):
         """Section 4.8.3: until the collaborative component is available, keep
         a small share of the list for highly rated services in categories
         related to (same parent as) the top matches, but not the same ones."""
-        n_reserve = int(round(top_n * self.cfg.diversity_share))
+        share = self.cfg.diversity_share if share is None else share
+        n_reserve = int(round(top_n * share))
         if n_reserve <= 0 or top_n < 3 or len(order) <= top_n - n_reserve:
             return order, set()
         head = order[: top_n - n_reserve]
@@ -508,28 +707,90 @@ class HybridRecommender:
         return out
 
     # ------------------------------------------------------------- evaluate
-    def evaluate(self, test: pd.DataFrame, top_n=10, alpha=None, only_items=None):
-        truth = test[test.provider_id.isin(self.p_index)] \
-            .groupby("user_id").provider_id.apply(set).to_dict()
-        ps, rs, hits = [], [], []
+    def evaluate(self, test: pd.DataFrame, top_n=10, alpha=None, only_items=None,
+                 overrides=None, per_user=False, ranker=None, space=None):
+        """Offline ranking metrics at top_n on held-out interactions.
+
+        precision, recall, f1, hit_rate, ndcg, mrr: averaged over users with a
+        held-out provider. coverage: share of the catalogue recommended to
+        anyone. diversity: mean intra-list dissimilarity (1 - cosine between
+        the recommended services' content vectors). categories: mean number of
+        distinct categories in a list. per_user=True also returns each user's
+        values, for paired comparisons between systems.
+
+        ranker(user_id, top_n) -> [provider_id, ...] scores an outside system
+        (a popularity or random baseline) with exactly the same code.
+        space: another fitted engine whose content vectors measure diversity,
+        so engines with different encoders are compared in one space.
+        """
+        space = space or self
+        truth = test[test.provider_id.isin(self.p_index)]             .groupby("user_id").provider_id.apply(set).to_dict()
+        ps, rs, hits, ndcgs, rrs, ilds, cats, users = [], [], [], [], [], [], [], []
+        shown = set()
         for uid, relevant in truth.items():
             if uid not in self.u_index:
                 continue
             target = relevant & only_items if only_items is not None else relevant
             if not target:
                 continue
-            res = self.recommend(user_id=uid, top_n=top_n, alpha=alpha)
-            got = {r["provider_id"] for r in res["results"]}
-            hit = len(got & target)
+            if ranker is not None:
+                ranked = [int(p) for p in ranker(uid, top_n)][:top_n]
+            else:
+                res = self.recommend(user_id=uid, top_n=top_n, alpha=alpha, overrides=overrides)
+                ranked = [r["provider_id"] for r in res["results"]]
+            shown.update(ranked)
+            rel = [1.0 if p in target else 0.0 for p in ranked]
+            hit = sum(rel)
             ps.append(hit / top_n)
             rs.append(hit / len(target))
             hits.append(1.0 if hit else 0.0)
+            dcg = sum(r / np.log2(k + 2) for k, r in enumerate(rel))
+            idcg = sum(1 / np.log2(k + 2) for k in range(min(len(target), top_n)))
+            ndcgs.append(dcg / idcg if idcg else 0.0)
+            rrs.append(next((1.0 / (k + 1) for k, r in enumerate(rel) if r), 0.0))
+            if len(ranked) > 1:
+                v = space.item_vectors[[space.p_index[p] for p in ranked]]
+                sim = v @ v.T
+                n = len(ranked)
+                ilds.append(float(1 - (sim.sum() - np.trace(sim)) / (n * (n - 1))))
+            if ranked:
+                cats.append(len({int(self.item_cats[self.p_index[p]]) for p in ranked}))
+            users.append(uid)
         if not ps:
-            return dict(precision=0.0, recall=0.0, f1=0.0, hit_rate=0.0, users=0)
+            return dict(precision=0.0, recall=0.0, f1=0.0, hit_rate=0.0, ndcg=0.0, mrr=0.0,
+                        coverage=0.0, diversity=0.0, categories=0.0, users=0)
         p, r = float(np.mean(ps)), float(np.mean(rs))
-        return dict(precision=round(p, 4), recall=round(r, 4),
-                    f1=round(0.0 if p + r == 0 else 2 * p * r / (p + r), 4),
-                    hit_rate=round(float(np.mean(hits)), 4), users=len(ps))
+        out = dict(precision=round(p, 4), recall=round(r, 4),
+                   f1=round(0.0 if p + r == 0 else 2 * p * r / (p + r), 4),
+                   hit_rate=round(float(np.mean(hits)), 4),
+                   ndcg=round(float(np.mean(ndcgs)), 4), mrr=round(float(np.mean(rrs)), 4),
+                   coverage=round(len(shown) / max(1, self.n_items), 4),
+                   diversity=round(float(np.mean(ilds)), 4) if ilds else 0.0,
+                   categories=round(float(np.mean(cats)), 2) if cats else 0.0,
+                   users=len(ps))
+        if per_user:
+            out["per_user"] = dict(user_id=users, recall=rs, ndcg=ndcgs, precision=ps,
+                                   mrr=rrs, hit_rate=hits)
+        return out
+
+    def tune_ranking(self, validation: pd.DataFrame, top_n=10,
+                     location_values=(0.0, 0.05, 0.1, 0.2, 0.3),
+                     quality_values=(0.0, 0.05, 0.1, 0.2)):
+        """Chooses gamma (location) then delta (quality) by validation recall@N,
+        holding alpha fixed. Ties go to the smaller weight: a feature has to
+        earn its place. Pass a VALIDATION split, never the test set."""
+        rows = []
+        def score(g, d):
+            m = self.evaluate(validation, top_n=top_n,
+                              overrides=dict(location_weight=g, quality_weight=d))
+            rows.append(dict(location_weight=g, quality_weight=d, **m))
+            return m["recall"]
+        best_g = max(location_values, key=lambda g: (score(g, 0.0), -g))
+        best_d = max(quality_values, key=lambda d: (score(best_g, d), -d))
+        self.cfg.location_weight, self.cfg.quality_weight = float(best_g), float(best_d)
+        self.cfg.ranking_source = f"validation recall@{top_n} (tune_ranking)"
+        self._loc_cache = {}
+        return dict(location_weight=best_g, quality_weight=best_d), pd.DataFrame(rows)
 
     def review_alpha(self, test: pd.DataFrame, top_n=10,
                      alpha_values=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0)):

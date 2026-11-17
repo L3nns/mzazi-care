@@ -5,6 +5,8 @@
  * authenticates with a shared service token. If the service is unreachable the
  * caller degrades gracefully rather than failing the page.
  */
+const { log, requestId } = require('./logger');
+
 const BASE = process.env.ML_SERVICE_URL || 'http://localhost:8000';
 const TOKEN = process.env.ML_SERVICE_TOKEN || '';
 const TIMEOUT = Number(process.env.ML_TIMEOUT_MS || 8000);
@@ -21,6 +23,8 @@ async function call(path, { method = 'GET', body, timeout = TIMEOUT } = {}) {
       headers: {
         'Content-Type': 'application/json',
         ...(TOKEN ? { 'X-Service-Token': TOKEN } : {}),
+        // The same id in both services' logs.
+        ...(requestId() ? { 'X-Request-Id': requestId() } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
@@ -54,13 +58,29 @@ const recommend = (payload) => call('/recommend', { method: 'POST', body: payloa
 const similar = (providerId, topN = 5) =>
   call(`/similar/${providerId}?top_n=${topN}`);
 const reindex = () => call('/reindex', { method: 'POST', timeout: REBUILD_TIMEOUT });
-const retrain = () => call('/retrain', { method: 'POST', timeout: REBUILD_TIMEOUT });
+const retrain = (by) => call('/retrain', { method: 'POST', body: by ? { by } : undefined, timeout: REBUILD_TIMEOUT });
+const models = () => call('/models');
+const promote = (id, by) => call(`/models/${encodeURIComponent(id)}/promote`,
+  { method: 'POST', body: { by }, timeout: REBUILD_TIMEOUT });
+const rollback = (by) => call('/models/rollback', { method: 'POST', body: { by }, timeout: REBUILD_TIMEOUT });
 
-/** Fire-and-forget: a verification must not fail because re-indexing did. */
+/**
+ * Fire-and-forget: a verification must not fail because re-indexing did. If a
+ * rebuild is already running it may have read the catalogue before this
+ * change, so one follow-up re-index is queued rather than the change dropped.
+ * Several changes during one rebuild share that single follow-up.
+ */
+let followUp = null;
 function reindexQuietly() {
-  reindex().catch((err) => console.warn('[ml] reindex failed:', err.message));
+  reindex().catch((err) => {
+    if (err.status !== 409) { log.warn('re-index failed', { err }); return; }
+    if (followUp) return;
+    followUp = setTimeout(() => { followUp = null; reindexQuietly(); },
+      Number(process.env.ML_REINDEX_RETRY_MS || 15000));
+    followUp.unref();
+  });
 }
 
 module.exports = {
-  health, modelCard, recommend, similar, reindex, retrain, reindexQuietly,
+  health, modelCard, recommend, similar, reindex, retrain, reindexQuietly, models, promote, rollback,
 };

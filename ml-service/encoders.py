@@ -54,6 +54,7 @@ DEFAULT_SBERT = os.getenv("MZAZI_SBERT_MODEL", "all-MiniLM-L6-v2")
 class ContentEncoder(ABC):
     """Fit on the catalogue once, then encode any text into the same space."""
 
+
     name: str = "base"
     dim: int = 0
 
@@ -67,6 +68,9 @@ class ContentEncoder(ABC):
     # Cosine similarity below which a query matches nothing (Table 4.3). Each
     # encoder has its own scale, so each sets its own default.
     default_min_similarity: float = 0.10
+    # Share of the best query match a result must reach (see EngineConfig).
+    # Off for TF-IDF: its cosines spread differently and it is uncalibrated.
+    default_relevance_ratio: float = 0.0
 
     def encode_one(self, text: str) -> np.ndarray:
         return self.encode_queries([text])[0]
@@ -108,6 +112,7 @@ class SbertEncoder(ContentEncoder):
         # Sentence embeddings rarely fall near zero: unrelated text still scores
         # 0.1-0.2 against these listings, while genuine matches score above 0.3.
         self.default_min_similarity = 0.25
+        self.default_relevance_ratio = 0.85
         self._fitted_on = 0
         # Embeddings are deterministic, so a re-index only pays for text that
         # actually changed (Section 4.8.1: "computed once and cached").

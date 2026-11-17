@@ -516,7 +516,9 @@ button.chip { font-family: inherit; cursor: pointer; }
 .panel-head h1, .panel-head h2 { margin: 0; }
 .button-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .7rem; }
 .row-actions { display: flex; gap: .4rem; flex-wrap: wrap; align-self: center; }
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* position: relative so absolutely positioned content inside (the .sr-only
+   "Action" header) is clipped by the scroll area instead of widening the page. */
+.table-wrap { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 td.actions { white-space: nowrap; }
 td.actions .btn { margin: .1rem 0; }
 code { font-size: .8rem; background: var(--line-soft); padding: .05rem .35rem; border-radius: 4px; }
@@ -662,3 +664,49 @@ label.check input { width: auto; box-shadow: none; }
     scroll-behavior: auto !important;
   }
 }
+/* ---------------------------------------------------------- site footer */
+.site-footer { border-top: 1px solid var(--line); margin-top: 2rem; padding: 1.25rem 0; background: #fff; }
+.footer-inner { display: grid; gap: .5rem; }
+.safety-note { margin: 0; font-size: .9rem; line-height: 1.5; max-width: 75ch; }
+.site-footer p.muted { margin: 0; }
+.prose { max-width: 70ch; line-height: 1.6; }
+.prose h2 { margin-top: 1.5rem; }
+
+/* ------------------------------------------------- verification workflow */
+.notice {
+  border: 1px solid rgba(176, 125, 43, .35); background: var(--amber-50);
+  border-radius: var(--radius-sm); padding: .7rem .9rem; margin-bottom: 1rem; font-size: .92rem;
+}
+.checklist { list-style: none; padding: 0; margin: 0 0 .8rem; display: grid; gap: .3rem; font-size: .9rem; }
+.checklist li { display: flex; gap: .45rem; align-items: baseline; flex-wrap: wrap; }
+.checklist li.ok > span:first-child { color: var(--teal); font-weight: 700; }
+.checklist li.todo > span:first-child { color: var(--amber); font-weight: 700; }
+.doc-list li.doc > span:first-child { display: flex; flex-wrap: wrap; gap: .25rem .5rem; align-items: baseline; }
+.doc-status {
+  font-size: .75rem; font-weight: 600; padding: .05rem .45rem; border-radius: 999px;
+  background: var(--amber-50); color: var(--amber);
+}
+.doc-status.accepted { background: var(--teal-50); color: var(--teal-600); }
+.doc-status.rejected, .doc-status.bad { background: var(--red-50); color: var(--red-600); }
+.queued select, .queued input[type="date"] { width: auto; max-width: 100%; font-size: .85rem; padding: .25rem .4rem; }
+.inline-label { margin: 0; font-size: .82rem; color: var(--muted); }
+.doc-reqs { border: 0; padding: 0; margin: 0 0 .9rem; }
+.doc-reqs legend { font-weight: 600; font-size: .9rem; margin-bottom: .35rem; }
+.mfa-key { font-family: ui-monospace, Consolas, monospace; letter-spacing: .08em; overflow-wrap: anywhere;
+  background: var(--bg-alt); padding: .5rem .6rem; border-radius: var(--radius-sm); }
+
+/* ------------------------------------------- explanations, feedback, areas */
+.area-note { font-size: .85rem; color: var(--teal-600); margin-top: .2rem; }
+details.why, details.fb { margin-top: .35rem; font-size: .85rem; }
+details.why summary, details.fb summary {
+  cursor: pointer; color: var(--blue); width: fit-content; border-radius: 3px;
+}
+details.fb summary { color: var(--muted); }
+details.why summary:focus-visible, details.fb summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+details.why ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+details.why li { margin: .1rem 0; }
+.fb-options { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
+
+.area-set { border: 0; padding: 0; margin: 0 0 .9rem; }
+.area-set legend { font-weight: 600; font-size: .9rem; margin-bottom: .35rem; }
+.area-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .1rem .6rem; }

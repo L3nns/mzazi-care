@@ -1,8 +1,8 @@
 /* Account area (Figure 4.12): sign in or register, then profile, preferences,
-   saved services, search history and password. */
+   saved services, search history, password, and your data (deletion). */
 const SECTIONS = [
   ['saved', 'Saved services'], ['preferences', 'Preferences'], ['profile', 'My profile'],
-  ['history', 'Search history'], ['password', 'Change password'],
+  ['history', 'Search history'], ['password', 'Password and sign-in'], ['data', 'Your data'],
 ];
 let account = null;     // { user, preferences, categories, locations }
 
@@ -71,6 +71,7 @@ function showAuth(mode) {
           full_name: document.getElementById('full_name').value.trim(),
           location: document.getElementById('location').value.trim() || undefined,
         });
+      if (data.mfa_required) { showCodeStep(data.mfa_token); return; }
       API.setSession(data.token, data.user);
       UI.renderNav();
       // A new account starts at preferences: they seed the first recommendations.
@@ -79,6 +80,41 @@ function showAuth(mode) {
       errBox.textContent = formError(err);
       errBox.classList.remove('hidden');
       btn.disabled = false;
+    }
+  });
+}
+
+/** Second step of sign-in: the 6-digit code from the authenticator app. */
+function showCodeStep(mfaToken) {
+  const root = document.getElementById('account-root');
+  root.innerHTML = `
+    <div class="panel" style="max-width:420px;margin:2rem auto">
+      <h1>Enter your sign-in code</h1>
+      <p class="muted">Open your authenticator app and type the 6-digit code shown for Mzazi Care.</p>
+      <form id="code-form" novalidate>
+        <div class="field"><label for="mfa-code">Code</label>
+          <input id="mfa-code" inputmode="numeric" autocomplete="one-time-code" pattern="\\d{6}"
+            maxlength="6" required></div>
+        <button class="btn" style="width:100%" type="submit">Sign in</button>
+        <div class="error-text hidden" id="code-error" role="alert"></div>
+      </form>
+      <p class="muted" style="margin-top:.8rem"><a href="account.html?tab=login">Start again</a></p>
+    </div>`;
+  const input = document.getElementById('mfa-code');
+  input.focus();
+  document.getElementById('code-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errBox = document.getElementById('code-error');
+    errBox.classList.add('hidden');
+    try {
+      const data = await API.mfaVerify({ mfa_token: mfaToken, code: input.value.trim() });
+      API.setSession(data.token, data.user);
+      UI.renderNav();
+      showAccount('saved');
+    } catch (err) {
+      errBox.textContent = formError(err);
+      errBox.classList.remove('hidden');
+      input.select();
     }
   });
 }
@@ -123,7 +159,7 @@ function openSection(section) {
     if (a.dataset.section === section) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  ({ saved, preferences, profile, history: searchHistory, password }[section] || saved)();
+  ({ saved, preferences, profile, history: searchHistory, password, data: yourData }[section] || saved)();
 }
 
 const box = () => document.getElementById('account-section');
@@ -288,8 +324,25 @@ function password() {
           <input id="pw-confirm" type="password" autocomplete="new-password" required></div>
         <button class="btn" type="submit">Change password</button>
         <div class="error-text hidden" id="pw-error" role="alert"></div>
+        <p class="muted">Changing your password signs you out on every other device.</p>
       </form>
+    </div>
+    <div class="panel" style="max-width:420px;margin-top:1rem" id="mfa-panel">
+      <h2>Two-step sign-in</h2><p class="muted">Loading…</p>
+    </div>
+    <div class="panel" style="max-width:420px;margin-top:1rem">
+      <h2>Signed-in devices</h2>
+      <p class="muted">Lost a phone or used a shared computer? Sign out everywhere, including here.</p>
+      <button class="btn secondary" type="button" id="logout-all">Sign out of all devices</button>
     </div>`;
+  mfaPanel();
+  document.getElementById('logout-all').addEventListener('click', async () => {
+    try {
+      await API.logoutAll();
+      API.clearSession();
+      location.href = 'account.html?tab=login';
+    } catch (err) { UI.toast(err.message, true); }
+  });
   document.getElementById('pw-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errBox = document.getElementById('pw-error');
@@ -301,14 +354,148 @@ function password() {
       return;
     }
     try {
-      await API.changePassword({
+      const out = await API.changePassword({
         current_password: document.getElementById('pw-current').value, new_password: next,
       });
+      // Older sessions are now revoked; keep this one with the fresh token.
+      if (out.token) API.setSession(out.token, out.user);
       e.target.reset();
       UI.toast('Password changed');
     } catch (err) {
       errBox.textContent = formError(err);
       errBox.classList.remove('hidden');
     }
+  });
+}
+
+/* Your data: what is kept and for how long, and deleting the account. */
+function yourData() {
+  const { user } = account;
+  const isAdmin = user.role === 'admin';
+  box().innerHTML = `
+    <div class="panel" style="max-width:560px">
+      <h1>Your data</h1>
+      <p>Searches are kept for a year, your activity (views, saves, ratings) for two years,
+        then deleted automatically. The <a href="privacy.html">privacy notice</a> lists
+        everything that is kept. You can clear your search history at any time from
+        <a href="account.html?tab=history">Search history</a>.</p>
+    </div>
+    <div class="panel" style="max-width:560px;margin-top:1rem">
+      <h2>Delete my account</h2>
+      ${isAdmin ? `<p class="notice">Administrator accounts cannot be deleted. Ask another
+        administrator to remove your admin role first; your record of administrator actions
+        is kept in the audit log.</p>` : `
+      <p>This deletes your account and everything recorded about it: your profile, preferences,
+        saved services, searches, ratings and activity. It cannot be undone. Ratings you gave
+        stop counting towards providers' averages.</p>
+      <form id="del-form" novalidate>
+        <div class="field"><label for="del-password">Your password</label>
+          <input id="del-password" type="password" autocomplete="current-password" required></div>
+        ${user.mfa_enabled ? `<div class="field"><label for="del-code">Code from your authenticator app</label>
+          <input id="del-code" inputmode="numeric" autocomplete="one-time-code" pattern="\\d{6}" maxlength="6" required></div>` : ''}
+        <label class="check"><input type="checkbox" id="del-confirm"> I understand this cannot be undone</label>
+        <button class="btn danger" type="submit" style="margin-top:.8rem">Delete my account</button>
+        <div class="error-text hidden" id="del-error" role="alert"></div>
+      </form>`}
+    </div>`;
+  const form = document.getElementById('del-form');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errBox = document.getElementById('del-error');
+    errBox.classList.add('hidden');
+    if (!document.getElementById('del-confirm').checked) {
+      errBox.textContent = 'Tick the box to confirm.';
+      errBox.classList.remove('hidden');
+      return;
+    }
+    try {
+      await API.deleteAccount({
+        password: document.getElementById('del-password').value,
+        code: document.getElementById('del-code')?.value.trim() || undefined,
+      });
+      API.clearSession();
+      document.getElementById('account-root').innerHTML = `
+        <div class="panel" style="max-width:560px" role="status">
+          <h1>Your account has been deleted</h1>
+          <p>Your profile and everything recorded about you have been removed.</p>
+          <p><a class="btn" href="index.html">Back to Mzazi Care</a></p>
+        </div>`;
+    } catch (err) {
+      errBox.textContent = formError(err);
+      errBox.classList.remove('hidden');
+    }
+  });
+}
+
+/* Two-step sign-in: off -> setup (show key) -> confirm a code -> on. */
+async function mfaPanel() {
+  const panel = document.getElementById('mfa-panel');
+  if (!panel) return;
+  let enabled = false;
+  try { enabled = !!(await API.me()).user.mfa_enabled; } catch { /* shown as off */ }
+  if (enabled) {
+    panel.innerHTML = `
+      <h2>Two-step sign-in</h2>
+      <p><strong>On.</strong> Signing in needs your password and a code from your authenticator app.</p>
+      <form id="mfa-off" novalidate>
+        <div class="field"><label for="mfa-off-pw">Password</label>
+          <input id="mfa-off-pw" type="password" autocomplete="current-password" required></div>
+        <div class="field"><label for="mfa-off-code">Current code</label>
+          <input id="mfa-off-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></div>
+        <button class="btn secondary" type="submit">Turn off two-step sign-in</button>
+        <div class="error-text hidden" id="mfa-off-error" role="alert"></div>
+      </form>`;
+    panel.querySelector('#mfa-off').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errBox = panel.querySelector('#mfa-off-error');
+      try {
+        await API.mfaDisable({
+          password: panel.querySelector('#mfa-off-pw').value,
+          code: panel.querySelector('#mfa-off-code').value.trim(),
+        });
+        UI.toast('Two-step sign-in is off');
+        mfaPanel();
+      } catch (err) { errBox.textContent = formError(err); errBox.classList.remove('hidden'); }
+    });
+    return;
+  }
+  panel.innerHTML = `
+    <h2>Two-step sign-in</h2>
+    <p class="muted">Off. Add a code from an authenticator app (such as Google Authenticator,
+      Microsoft Authenticator or Aegis) to every sign-in. Recommended for administrators.</p>
+    <button class="btn" type="button" id="mfa-start">Set up two-step sign-in</button>`;
+  panel.querySelector('#mfa-start').addEventListener('click', async () => {
+    let setup;
+    try { setup = await API.mfaSetup(); } catch (err) { UI.toast(formError(err), true); return; }
+    const key = setup.secret.match(/.{1,4}/g).join(' ');
+    panel.innerHTML = `
+      <h2>Set up two-step sign-in</h2>
+      <ol>
+        <li>In your authenticator app, add an account and choose to enter a setup key.</li>
+        <li>Enter this key, with account name <strong>Mzazi Care</strong> and type <strong>time-based</strong>:
+          <div class="mfa-key" id="mfa-key">${UI.esc(key)}</div>
+          <button class="btn secondary small" type="button" id="mfa-copy">Copy key</button></li>
+        <li>Type the 6-digit code the app now shows.</li>
+      </ol>
+      <form id="mfa-confirm" novalidate>
+        <div class="field"><label for="mfa-confirm-code">Code from the app</label>
+          <input id="mfa-confirm-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></div>
+        <button class="btn" type="submit">Turn on</button>
+        <div class="error-text hidden" id="mfa-confirm-error" role="alert"></div>
+      </form>`;
+    panel.querySelector('#mfa-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(setup.secret); UI.toast('Key copied'); }
+      catch { window.getSelection().selectAllChildren(panel.querySelector('#mfa-key')); }
+    });
+    panel.querySelector('#mfa-confirm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errBox = panel.querySelector('#mfa-confirm-error');
+      try {
+        await API.mfaEnable(panel.querySelector('#mfa-confirm-code').value.trim());
+        UI.toast('Two-step sign-in is on');
+        mfaPanel();
+      } catch (err) { errBox.textContent = formError(err); errBox.classList.remove('hidden'); }
+    });
   });
 }

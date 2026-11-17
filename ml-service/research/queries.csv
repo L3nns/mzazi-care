@@ -1,0 +1,114 @@
+qid,split,subset,language,query,primary,also,area
+q001,dev,en_keyword,en,midwife,8,,
+q002,test,en_keyword,en,lactation consultant,12,13,
+q003,dev,en_keyword,en,nanny agency,22,,
+q004,test,en_keyword,en,daycare,23,,
+q005,dev,en_keyword,en,child vaccination,18,,
+q006,test,en_keyword,en,paediatrician,17,,
+q007,dev,en_keyword,en,doula,9,,
+q008,test,en_keyword,en,antenatal classes,6,5,
+q009,dev,en_keyword,en,postnatal depression counselling,14,,
+q010,test,en_keyword,en,prenatal yoga,16,,
+q011,dev,en_keyword,en,weaning advice,19,,
+q012,test,en_keyword,en,obstetrician,7,,
+q013,dev,en_keyword,en,speech therapy for children,21,,
+q014,test,en_keyword,en,parenting coach,24,,
+q015,dev,en_keyword,en,pregnancy nutritionist,15,,
+q016,test,en_keyword,en,postnatal home nurse,11,10,
+q017,dev,en_paraphrase,en,someone to help me breastfeed,12;13,,
+q018,test,en_paraphrase,en,my baby won't latch properly,12;13,,
+q019,dev,en_paraphrase,en,I feel sad since my baby was born,14,,
+q020,test,en_paraphrase,en,vaccines for my baby,18,,
+q021,dev,en_paraphrase,en,someone to look after my toddler at home,22,,
+q022,test,en_paraphrase,en,a place to leave my child during work hours,23,,
+q023,dev,en_paraphrase,en,help with baby sleep and tantrums,24,,
+q024,test,en_paraphrase,en,pregnancy check-up,5,7,
+q025,dev,en_paraphrase,en,someone to support me during labour,9,8,
+q026,test,en_paraphrase,en,my child has autism,21,,
+q027,dev,en_paraphrase,en,what to eat while pregnant,15,,
+q028,test,en_paraphrase,en,exercise after giving birth,16,,
+q029,dev,en_paraphrase,en,midwife for a home birth,8,,
+q030,test,en_paraphrase,en,weaning my baby onto solids,19,,
+q031,dev,en_paraphrase,en,high risk pregnancy specialist,7,,
+q032,test,en_paraphrase,en,classes to prepare for birth,6,,
+q033,dev,en_paraphrase,en,nurse to help at home after delivery,11,10,
+q034,test,en_paraphrase,en,doctor for my sick child,17,,
+q035,dev,en_paraphrase,en,someone to watch my kids while I work from home,22,23,
+q036,test,en_paraphrase,en,my toddler is not talking yet,21,20,
+q037,dev,en_paraphrase,en,help my baby reach milestones,20,,
+q038,test,en_paraphrase,en,my milk is not enough for the baby,12;13,,
+q039,dev,en_paraphrase,en,check that my unborn baby is growing well,5,7,
+q040,test,en_paraphrase,en,I am anxious and can't sleep since the baby came,14,,
+q041,dev,sw,sw,natafuta yaya wa mtoto,22,,
+q042,test,sw,sw,daktari wa watoto,17,,
+q043,dev,sw,sw,chanjo ya mtoto,18,,
+q044,test,sw,sw,mama mjamzito anahitaji kliniki,5;7,,
+q045,dev,sw,sw,msaada wa kunyonyesha,12;13,,
+q046,test,sw,sw,lishe ya mtoto,19,,
+q047,dev,sw,sw,mkunga wa kujifungua nyumbani,8,,
+q048,test,sw,sw,shule ya chekechea,23,,
+q049,dev,sw,sw,afya ya akili baada ya kujifungua,14,10,
+q050,test,sw,sw,malezi ya watoto,24,,
+q051,dev,sw,sw,mtoto wangu ana homa,17,,
+q052,test,sw,sw,mazoezi kwa mama mjamzito,16,,
+q053,dev,sw,sw,lishe bora wakati wa ujauzito,15,,
+q054,test,sw,sw,mtoto hazungumzi bado,21,20,
+q055,dev,sw,sw,masomo ya kujiandaa kujifungua,6,,
+q056,test,sw,sw,mlezi wa mtoto nyumbani,22,,
+q057,dev,sw,sw,msaidizi wakati wa uchungu wa uzazi,9,8,
+q058,test,sw,sw,huduma ya mama baada ya kujifungua nyumbani,11,10,
+q059,dev,sw,sw,daktari wa mimba hatari,7,,
+q060,test,sw,sw,maziwa ya mama hayatoshi,12;13,,
+q061,dev,sw,sw,ukuaji wa mtoto,20,,
+q062,dev,mixed,mixed,natafuta nanny mzuri,22,,
+q063,test,mixed,mixed,daycare ya mtoto wa miaka mbili,23,,
+q064,dev,mixed,mixed,baby yangu haikui vizuri,17,19;20,
+q065,test,mixed,mixed,nataka doula for my delivery,9,8,
+q066,dev,mixed,mixed,clinic ya chanjo,18,,
+q067,test,mixed,mixed,counselling baada ya kujifungua,14,,
+q068,dev,mixed,mixed,"lactation help, mtoto hanyonyi",12;13,,
+q069,test,mixed,mixed,pregnancy yoga classes,16,,
+q070,dev,mixed,mixed,"mtoto ana autism, tunahitaji therapy",21,,
+q071,test,mixed,mixed,diet ya mama anayenyonyesha,15,12,
+q072,dev,mixed,mixed,weaning foods za baby,19,,
+q073,test,mixed,mixed,postnatal nurse wa kuja nyumbani,11,10,
+q074,dev,mixed,mixed,parenting classes za discipline,24,,
+q075,test,mixed,mixed,antenatal check-up kliniki,5,6,
+q076,dev,location,en,midwife in Westlands,8,,Westlands
+q077,test,location,en,daycare near Kilimani,23,,Kilimani
+q078,dev,location,en,nanny in Karen,22,,Karen
+q079,test,location,en,paediatrician near Runda,17,,Runda
+q080,dev,location,en,vaccination clinic in Gigiri,18,,Gigiri
+q081,test,location,en,lactation consultant Upper Hill,12,,Upper Hill
+q082,dev,location,en,prenatal check-up in Kikuyu,5,,Kikuyu
+q083,test,location,en,postnatal counselling South B,14,,South B
+q084,dev,location,en,doula in Langata,9,,Langata
+q085,test,location,en,child nutritionist in Parklands,19,,Parklands
+q086,dev,location,en,special needs therapy Embakasi,21,,Embakasi
+q087,test,location,en,parenting coach in Parklands,24,,Parklands
+q088,dev,location,sw,natafuta yaya Buruburu,22,,Buruburu
+q089,test,location,sw,daktari wa watoto karibu na Karen,17,,Karen
+q090,dev,location,sw,chanjo ya mtoto Ruaka,18,,Ruaka
+q091,test,location,sw,mkunga huko Donholm,8,,Donholm
+q092,dev,location,sw,shule ya chekechea Donholm,23,,Donholm
+q093,test,location,sw,kliniki ya mama mjamzito South C,5,7,South C
+q094,dev,location,en,breastfeeding group in Kasarani,13,12,Kasarani
+q095,test,location,en,obstetrician in Westlands,7,,Westlands
+q096,dev,location,en,postnatal fitness Roysambu,16,,Roysambu
+q097,test,location,en,maternal nutritionist Westlands,15,,Westlands
+q098,dev,location,en,early childhood development Kileleshwa,20,,Kileleshwa
+q099,dev,no_match,en,car mechanic,,,
+q100,test,no_match,en,plumber in Westlands,,,Westlands
+q101,dev,no_match,en,wedding photographer,,,
+q102,test,no_match,en,dog grooming,,,
+q103,dev,no_match,en,laptop repair,,,
+q104,test,no_match,en,driving school,,,
+q105,dev,no_match,en,house for rent in Kilimani,,,Kilimani
+q106,test,no_match,sw,fundi wa magari,,,
+q107,dev,no_match,sw,nyumba ya kupangisha,,,
+q108,test,no_match,sw,mwalimu wa kuendesha gari,,,
+q109,dev,no_match,en,old age home for my grandfather,,,
+q110,test,no_match,en,bodybuilding gym for men,,,
+q111,dev,no_match,en,hair salon,,,
+q112,test,no_match,en,tax consultant,,,
+q113,dev,no_match,sw,mama mboga,,,

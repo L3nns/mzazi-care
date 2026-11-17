@@ -71,6 +71,12 @@ const API = (() => {
     me: () => call('/auth/me'),
     updateMe: (b) => call('/auth/me', { method: 'PUT', body: b }),
     changePassword: (b) => call('/auth/me/password', { method: 'PUT', body: b }),
+    logoutAll: () => call('/auth/logout-all', { method: 'POST' }),
+    deleteAccount: (b) => call('/auth/me', { method: 'DELETE', body: b }),
+    mfaVerify: (b) => call('/auth/mfa/verify', { method: 'POST', body: b, auth: false }),
+    mfaSetup: () => call('/auth/mfa/setup', { method: 'POST' }),
+    mfaEnable: (code) => call('/auth/mfa/enable', { method: 'POST', body: { code } }),
+    mfaDisable: (b) => call('/auth/mfa/disable', { method: 'POST', body: b }),
     setPreferences: (b) => call('/auth/me/preferences', { method: 'PUT', body: b }),
     mySearches: () => call('/auth/me/searches'),
     clearSearches: () => call('/auth/me/searches', { method: 'DELETE' }),
@@ -81,6 +87,8 @@ const API = (() => {
     provider: (id) => call(`/services/${id}`),
 
     recommendations: (params) => call(`/recommendations${qs(params)}`),
+    recFeedback: (providerId, feedback) => call('/recommendations/feedback',
+      { method: 'POST', body: { provider_id: providerId, feedback } }),
     // keepalive: a click that navigates away must still be recorded.
     interact: (b) => call('/interactions', { method: 'POST', body: b, keepalive: true }),
     myInteractions: () => call('/interactions/me'),
@@ -97,8 +105,13 @@ const API = (() => {
     adminVerify: (id, status, note) => call(`/admin/providers/${id}/verify`,
       { method: 'PUT', body: { verification_status: status, ...(note ? { note } : {}) } }),
     adminDeleteProvider: (id) => call(`/admin/providers/${id}`, { method: 'DELETE' }),
-    adminUpload: (id, kind, file) => call(`/admin/providers/${id}/media${qs({ kind })}`,
+    // Evidence also carries its document type and optional expiry date.
+    adminUpload: (id, kind, file, meta = {}) => call(
+      `/admin/providers/${id}/media${qs({ kind, document_type: meta.document_type, expires_on: meta.expires_on })}`,
       { method: 'POST', raw: file, contentType: file.type }),
+    adminReviewDocument: (mediaId, decision, note) => call(`/admin/media/${mediaId}/review`,
+      { method: 'PUT', body: { decision, ...(note ? { note } : {}) } }),
+    adminExpiringDocuments: (days) => call(`/admin/documents/expiring${qs({ days })}`),
     adminDeleteMedia: (mediaId) => call(`/admin/media/${mediaId}`, { method: 'DELETE' }),
     adminDownloadMedia: (mediaId, name) => download(`/admin/media/${mediaId}`, name),
     adminCategories: () => call('/admin/categories'),
@@ -107,8 +120,15 @@ const API = (() => {
     adminDeleteCategory: (id) => call(`/admin/categories/${id}`, { method: 'DELETE' }),
     adminUsers: (params) => call(`/admin/users${qs(params)}`),
     adminSetRole: (id, role) => call(`/admin/users/${id}/role`, { method: 'PUT', body: { role } }),
+    adminDeleteUser: (id, reason) => call(`/admin/users/${id}`, { method: 'DELETE', body: { reason } }),
     adminReports: (params) => call(`/admin/reports${qs(params)}`),
     adminReindex: () => call('/admin/model/reindex', { method: 'POST' }),
     adminRetrain: () => call('/admin/model/retrain', { method: 'POST' }),
+    adminModelVersions: () => call('/admin/model/versions'),
+    adminPromoteModel: (id) => call(`/admin/model/versions/${encodeURIComponent(id)}/promote`, { method: 'POST' }),
+    adminRollbackModel: () => call('/admin/model/rollback', { method: 'POST' }),
+    adminAreas: () => call('/admin/areas'),
+    adminCreateArea: (b) => call('/admin/areas', { method: 'POST', body: b }),
+    adminUpdateArea: (id, b) => call(`/admin/areas/${id}`, { method: 'PUT', body: b }),
   };
 })();

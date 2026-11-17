@@ -6,6 +6,7 @@ Train, tune and evaluate the hybrid engine from the command line.
     python train.py --tune               # grid search k and alpha first
     python train.py --compare-encoders   # neural vs TF-IDF+SVD, side by side
     python train.py --encoder sbert      # force sentence embeddings
+    python train.py --tune-ranking       # choose location/quality weights on validation
 
 Writes model/hybrid_model.joblib plus the tables Chapter Five needs.
 """
@@ -20,7 +21,7 @@ from pathlib import Path
 import pandas as pd
 
 from db import DataSource
-from engine import HybridRecommender, EngineConfig
+from engine import HybridRecommender, EngineConfig, holdout_split
 from encoders import build_encoder, sbert_available
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -43,6 +44,9 @@ def main():
     ap.add_argument("--top-n", type=int, default=10)
     ap.add_argument("--tune", action="store_true")
     ap.add_argument("--compare-encoders", action="store_true")
+    ap.add_argument("--tune-ranking", action="store_true",
+                    help="choose the location and quality weights on a validation "
+                         "split cut from the training period (never the test set)")
     ap.add_argument("--full", action="store_true",
                     help="train on all interactions (production model)")
     args = ap.parse_args()
@@ -56,7 +60,10 @@ def main():
     test = frames.get("interactions_test", pd.DataFrame())
     # Searches and declared preferences feed the preference vector (Section 4.8.1).
     side = dict(searches=frames.get("search_history"),
-                preferences=frames.get("user_preferences"))
+                preferences=frames.get("user_preferences"),
+                areas=frames.get("service_areas"),
+                provider_areas=frames.get("provider_service_areas"),
+                users=frames.get("users"))
 
     print(f"providers {len(providers)}   train {len(train)}   test {len(test)}")
     print(f"sentence-transformers installed: {sbert_available()}")
@@ -100,6 +107,19 @@ def main():
         grid.to_csv(OUT / "tuning_results.csv", index=False)
         print(f"\ntuned  : k={eng.cfg.k}  alpha={eng.cfg.alpha}")
         print(grid.sort_values("recall", ascending=False).head(6).to_string(index=False))
+
+    if args.tune_ranking:
+        val_train, val_test = holdout_split(train, eng.cfg.min_interactions)
+        selector = HybridRecommender(EngineConfig(**{**eng.cfg.to_dict(), "extra": {}}),
+                                     encoder=eng.encoder).fit(providers, val_train, categories, **side)
+        best, grid = selector.tune_ranking(val_test, top_n=args.top_n)
+        grid.to_csv(OUT / "ranking_tuning.csv", index=False)
+        eng.cfg.location_weight, eng.cfg.quality_weight = best["location_weight"], best["quality_weight"]
+        eng.cfg.ranking_source = selector.cfg.ranking_source
+        eng._loc_cache = {}
+        print(f"\nranking weights (validation): location={best['location_weight']}  "
+              f"quality={best['quality_weight']}")
+        print(grid[["location_weight", "quality_weight", "recall", "ndcg", "users"]].to_string(index=False))
 
     summary = {"encoder": eng.encoder.name, "config": eng.cfg.to_dict()}
 

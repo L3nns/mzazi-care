@@ -42,10 +42,17 @@ const UI = (() => {
     }
   }
 
+  // Verification states. The label carries the meaning; colour only repeats it.
+  const STATUS_LABELS = {
+    draft: 'Draft', pending: 'Pending', under_review: 'Under review',
+    needs_more_information: 'Needs more information', verified: 'Verified',
+    rejected: 'Rejected', suspended: 'Suspended', expired: 'Expired',
+  };
   const statusBadge = (s) => {
     const cls = s === 'verified' ? 'badge-verified'
-      : s === 'pending' ? 'badge-verified badge-pending' : 'badge-verified badge-rejected';
-    return `<span class="${cls}">${esc(s)}</span>`;
+      : ['rejected', 'suspended', 'expired'].includes(s) ? 'badge-verified badge-rejected'
+        : 'badge-verified badge-pending';
+    return `<span class="${cls}">${esc(STATUS_LABELS[s] || s)}</span>`;
   };
 
   const tagChips = (tags, limit = 4) => String(tags || '').split(',')
@@ -61,6 +68,17 @@ const UI = (() => {
       <span aria-hidden="true">★</span> ${n.toFixed(1)} <span class="muted">(${Number(count)})</span></span>`;
   }
 
+  /** "Serves Kilimani" or "About 3 km from Kilimani" - distances are between area centres. */
+  function areaNote(p) {
+    if (!p.area_origin) return '';
+    if (p.serves_origin) return `<div class="area-note">Serves ${esc(p.area_origin)}</div>`;
+    if (p.distance_km !== null && p.distance_km !== undefined) {
+      return `<div class="area-note">About ${Math.max(1, Math.round(p.distance_km))} km from ${esc(p.area_origin)}
+        <span class="muted">(between area centres)</span></div>`;
+    }
+    return '';
+  }
+
   function resultCard(p) {
     return `<article class="result">
       <div class="thumb" aria-hidden="true">${esc(initials(p.provider_name))}</div>
@@ -68,10 +86,47 @@ const UI = (() => {
         <h3><a href="provider.html?id=${Number(p.provider_id)}" data-track="${Number(p.provider_id)}">${esc(p.provider_name)}</a></h3>
         <div class="muted">${esc(p.category_name || '')}${p.location ? ` &middot; ${esc(p.location)}` : ''}
           ${stars(p.avg_rating, p.rating_count)}</div>
+        ${areaNote(p)}
         <div style="margin:.4rem 0">${tagChips(p.service_tags)}</div>
         ${p.verification_status === 'verified' ? '<span class="badge-verified">Verified</span>' : ''}
       </div>
     </article>`;
+  }
+
+  const FEEDBACK_OPTIONS = [
+    ['not_relevant', 'Not relevant to me'], ['too_far', 'Too far away'],
+    ['wrong_category', 'Wrong kind of service'], ['already_contacted', 'Already contacted them'],
+  ];
+
+  /**
+   * One recommended provider, with "Why am I seeing this?" (the engine's
+   * reasons, from real score components) and, when signed in, feedback.
+   */
+  function recItem(r) {
+    const reasons = (r.reasons || []).map((x) => `<li>${esc(x.text)}</li>`).join('');
+    const id = Number(r.provider_id);
+    const signedIn = Boolean(API.getToken());
+    return `<div class="rec-item" data-rec="${id}">
+      <a href="provider.html?id=${id}" data-track="${id}">${esc(r.provider_name)}</a>
+      <div class="muted">${esc(r.category_name || '')}${r.location ? ` &middot; ${esc(r.location)}` : ''}
+        ${stars(r.avg_rating, r.rating_count)}</div>
+      ${reasons ? `<details class="why"><summary>Why am I seeing this?</summary><ul>${reasons}</ul></details>` : ''}
+      ${signedIn ? `<details class="fb"><summary>Not for me</summary>
+        <div class="fb-options">${FEEDBACK_OPTIONS.map(([k, label]) =>
+    `<button type="button" class="btn secondary small" data-fb="${k}">${esc(label)}</button>`).join('')}</div>
+      </details>` : ''}
+    </div>`;
+  }
+
+  /** Wires the feedback buttons in a list built from recItem(). */
+  function bindFeedback(container) {
+    container.querySelectorAll('[data-fb]').forEach((b) => b.addEventListener('click', async () => {
+      const item = b.closest('[data-rec]');
+      try {
+        await API.recFeedback(Number(item.dataset.rec), b.dataset.fb);
+        item.innerHTML = '<p class="muted" role="status">Thanks — we will not suggest this provider to you again.</p>';
+      } catch (err) { toast(err.message, true); }
+    }));
   }
 
   /** Splits /api/categories into service types (top level) and their categories. */
@@ -146,7 +201,7 @@ const UI = (() => {
 
   document.addEventListener('DOMContentLoaded', renderNav);
   return {
-    esc, toast, renderNav, statusBadge, tagChips, stars, resultCard, categoryTree,
+    esc, toast, renderNav, statusBadge, STATUS_LABELS, tagChips, stars, resultCard, recItem, bindFeedback, categoryTree,
     categoryOptions, pager, fmtDate, track, trackClicks, params, initials,
   };
 })();

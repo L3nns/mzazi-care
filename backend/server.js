@@ -16,14 +16,26 @@ require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
-const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const { notFound, errorHandler } = require('./middleware/errors');
 const ml = require('./services/mlClient');
+const { log, requestLogger } = require('./services/logger');
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
+
+// Behind a reverse proxy (TLS termination), the client address is in
+// X-Forwarded-For. Without this every visitor shares the proxy's address and
+// the per-client rate limits below become one limit for everyone. Set it to
+// the number of proxies in front (usually 1); leave unset when exposed directly.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set('trust proxy', Number.isInteger(hops) ? hops : process.env.TRUST_PROXY);
+}
+
+// First, so every later line - including errors - carries the request id.
+app.use(requestLogger);
 
 /* ------------------------------------------------------------- security */
 app.use(helmet({
@@ -37,10 +49,12 @@ app.use(helmet({
     },
   },
 }));
-app.use(cors({ origin: process.env.CORS_ORIGIN || true, credentials: true }));
+// The front end is served from this same origin, so cross-origin calls are
+// only allowed for the origins CORS_ORIGIN lists (comma-separated).
+const corsOrigins = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+app.use(cors({ origin: corsOrigins.length ? corsOrigins : false, credentials: true }));
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ extended: true, limit: '256kb' }));
-if (process.env.NODE_ENV !== 'test') app.use(morgan('tiny'));
 
 app.use('/api', rateLimit({
   windowMs: 60_000,
@@ -52,6 +66,8 @@ app.use('/api', rateLimit({
 // Brute-force protection on the credential endpoints specifically.
 app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60_000, max: 20 }));
 app.use('/api/auth/register', rateLimit({ windowMs: 60 * 60_000, max: 10 }));
+// Six-digit codes are guessable without a tight limit on attempts.
+app.use('/api/auth/mfa', rateLimit({ windowMs: 15 * 60_000, max: 20 }));
 
 /* --------------------------------------------------------------- routes */
 app.get('/api/health', async (_req, res) => {
@@ -59,6 +75,11 @@ app.get('/api/health', async (_req, res) => {
   try { mlHealth = await ml.health(); } catch (err) { mlHealth.error = err.message; }
   res.json({ status: 'ok', service: 'mzazi-care-api', ml: mlHealth });
 });
+
+// The API description; backend/tests/openapi.test.js keeps it in step with the routes.
+const OPENAPI = process.env.OPENAPI_FILE
+  || path.resolve(__dirname, '..', 'docs', 'api', 'openapi.yaml');
+app.get('/api/openapi.yaml', (_req, res) => res.type('application/yaml').sendFile(OPENAPI));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/categories', require('./routes/categories'));
@@ -81,13 +102,17 @@ if (require.main === module) {
   // Bring an older database up to date before serving; failure is reported,
   // not fatal, so a read-only database user can still run the site.
   require('./config/migrate').migrate()
-    .catch((err) => console.warn('[migrate] skipped:', err.message))
+    .catch((err) => log.warn('migrations skipped', { err }))
     .finally(() => {
-      app.listen(PORT, () => {
-        console.log(`Mzazi Care API listening on http://localhost:${PORT}`);
-        console.log(`  recommendation service: ${process.env.ML_SERVICE_URL || 'http://localhost:8000'}`);
-        console.log(`  front end: ${FRONTEND}`);
-      });
+      // Daily check that verified listings still hold current documents.
+      require('./services/expiry').schedule();
+      // Daily deletion of personal data past its retention period.
+      require('./services/retention').schedule();
+      app.listen(PORT, () => log.info('listening', {
+        url: `http://localhost:${PORT}`,
+        ml_service: process.env.ML_SERVICE_URL || 'http://localhost:8000',
+        frontend: FRONTEND,
+      }));
     });
 }
 

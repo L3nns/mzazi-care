@@ -24,6 +24,7 @@
     <button class="tab" type="button" data-view="listings">Provider listings</button>
     <button class="tab" type="button" data-view="form">Add listing</button>
     <button class="tab" type="button" data-view="categories">Categories</button>
+    <button class="tab" type="button" data-view="areas">Service areas</button>
     <button class="tab" type="button" data-view="users">Registered users</button>
     <button class="tab" type="button" data-view="reports">Reports</button>
     <button class="tab" type="button" data-view="logs">Activity log</button>
@@ -44,8 +45,15 @@
     </div>
   </form>
 </dialog>
-<footer style="border-top:1px solid var(--line);margin-top:2rem;padding:1.25rem 0;background:#fff">
-  <div class="container muted">Mzazi Care Discovery &amp; Catalog System · capstone prototype · seeded with synthetic data</div>
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <p class="safety-note"><strong>Mzazi Care helps you find services. It does not give medical advice.</strong>
+      Verification means an administrator has checked a provider's documents; it is not a guarantee of
+      clinical competence or safety. In an emergency, call <strong>999</strong> or <strong>112</strong>,
+      or go to the nearest hospital.</p>
+    <p class="muted">Mzazi Care Discovery &amp; Catalog System · capstone prototype · seeded with synthetic data ·
+      <a href="privacy.html">Privacy</a></p>
+  </div>
 </footer>
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>

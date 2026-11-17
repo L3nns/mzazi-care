@@ -204,7 +204,7 @@ backend/
 │                              users, reports, reindex/retrain, logs
 └── services/
     ├── mlClient.js           fetch() wrapper for the Python service
-    ├── catalog.js            keyword-search SQL, category tree, hydration
+    ├── catalog.js            search SQL (engine matches, or keywords as fallback), category tree, hydration
     └── media.js              evidence and image storage, type-checked by content
 ```
 
@@ -435,8 +435,8 @@ reasons). `provider_media.media_type` is `image` (public) or `evidence`
 (administrators only). `backend/config/migrate.js` upgrades a database created
 from an older schema. `seed_data.sql` — and the equivalent
 `seed/*.csv` files the ML service can read directly — populate 120
-providers, ~240 users and ~4,700 interactions with realistic category-scoped
-vocabulary.
+providers, ~240 users and ~5,000 interactions with realistic category-scoped
+vocabulary. `database/generate_seed.py` regenerates the behavioural tables.
 
 ---
 

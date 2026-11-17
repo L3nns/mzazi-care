@@ -16,17 +16,21 @@ process.env.ML_SERVICE_TOKEN = process.env.ML_SERVICE_TOKEN || 'devtoken';
 
 /* -------- stub only the database; the ML service is genuinely called -------- */
 const dbPath = require.resolve('../config/db');
-const providers = [
-  { provider_id: 1, service_tags: 'lactation,latch', service_description: 'desc',
-    location: 'Westlands', qualifications: 'IBCLC' },
-];
+// hydrate() keeps only engine results whose verified row comes back, so the
+// stub answers for whichever ids the engine returned.
+const providerRows = (ids) => ids.map((id) => ({
+  provider_id: Number(id), service_tags: 'tags', service_description: 'desc',
+  location: 'Westlands', qualifications: 'qualified', verification_status: 'verified',
+}));
 const db = {
-  query: async (sql) => {
-    if (/FROM providers p WHERE p.provider_id IN/.test(sql)) return providers;
+  query: async (sql, params = []) => {
+    if (/FROM providers p WHERE p.provider_id IN/.test(sql)) return providerRows(params);
     if (/COUNT\(\*\) AS total/.test(sql)) return [{ total: 0 }];
     return [];
   },
-  one: async () => null,
+  // The session check: user 7 exists and its token has not been revoked.
+  one: async (sql) => (/SELECT role, token_version FROM users/.test(sql)
+    ? { role: 'user', token_version: 0 } : null),
   getPool: () => ({}),
   close: async () => {},
 };
@@ -92,5 +96,6 @@ const token = issueToken({ user_id: 7, role: 'user', full_name: 'Smoke' });
   });
 
   console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');
-  process.exit(failures ? 1 : 0);
+  // exitCode, not exit(): exiting while sockets close crashes Node on Windows.
+  process.exitCode = failures ? 1 : 0;
 })();
