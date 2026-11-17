@@ -516,7 +516,9 @@ button.chip { font-family: inherit; cursor: pointer; }
 .panel-head h1, .panel-head h2 { margin: 0; }
 .button-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .7rem; }
 .row-actions { display: flex; gap: .4rem; flex-wrap: wrap; align-self: center; }
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* position: relative so absolutely positioned content inside (the .sr-only
+   "Action" header) is clipped by the scroll area instead of widening the page. */
+.table-wrap { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 td.actions { white-space: nowrap; }
 td.actions .btn { margin: .1rem 0; }
 code { font-size: .8rem; background: var(--line-soft); padding: .05rem .35rem; border-radius: 4px; }
