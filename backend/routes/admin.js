@@ -15,6 +15,9 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const ml = require('../services/mlClient');
 const media = require('../services/media');
 const { CATEGORY_FILTER_JOIN } = require('../services/catalog');
+const verification = require('../services/verification');
+const expiry = require('../services/expiry');
+const areas = require('../services/areas');
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
@@ -34,6 +37,13 @@ router.get('/stats', asyncRoute(async (_req, res) => {
        (SELECT COUNT(*) FROM providers WHERE verification_status = 'verified') AS verified,
        (SELECT COUNT(*) FROM providers WHERE verification_status = 'pending') AS pending,
        (SELECT COUNT(*) FROM providers WHERE verification_status = 'rejected') AS rejected,
+       (SELECT COUNT(*) FROM providers WHERE verification_status = 'under_review') AS under_review,
+       (SELECT COUNT(*) FROM providers
+         WHERE verification_status = 'needs_more_information') AS needs_more_information,
+       (SELECT COUNT(*) FROM providers WHERE verification_status = 'suspended') AS suspended,
+       (SELECT COUNT(*) FROM providers WHERE verification_status = 'expired') AS expired,
+       (SELECT COUNT(*) FROM providers
+         WHERE verification_status IN ('pending', 'under_review')) AS queue,
        (SELECT COUNT(*) FROM users WHERE role = 'user') AS users,
        (SELECT COUNT(*) FROM users WHERE role = 'admin') AS admins,
        (SELECT COUNT(*) FROM interactions) AS interactions,
@@ -42,9 +52,13 @@ router.get('/stats', asyncRoute(async (_req, res) => {
          WHERE searched_at > DATE_SUB(NOW(), INTERVAL 7 DAY)) AS searches_this_week,
        (SELECT COUNT(*) FROM search_history) AS searches_total`,
   );
+  const expiring = await expiry.expiringSoon();
+  const mfa = await one('SELECT mfa_enabled FROM users WHERE user_id = ?', [_req.user.user_id]);
   let model = null;
   try { model = await ml.modelCard(); } catch { /* service may be down */ }
-  res.json({ ...counts, model });
+  res.json({
+    ...counts, documents_expiring: expiring.length, mfa_enabled: !!(mfa && mfa.mfa_enabled), model,
+  });
 }));
 
 router.get(
@@ -78,7 +92,8 @@ router.get(
 router.get(
   '/providers',
   [
-    q('status').optional({ values: 'falsy' }).isIn(['pending', 'verified', 'rejected']),
+    // 'queue' = everything an administrator still has to act on.
+    q('status').optional({ values: 'falsy' }).isIn([...verification.STATES, 'queue']),
     q('q').optional().trim().isLength({ max: 120 }),
     q('category').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
     q('page').optional().isInt({ min: 1 }).toInt(),
@@ -90,7 +105,12 @@ router.get(
     const perPage = req.query.per_page || 20;
     const where = [];
     const params = [];
-    if (req.query.status) { where.push('p.verification_status = ?'); params.push(req.query.status); }
+    if (req.query.status === 'queue') {
+      where.push(`p.verification_status IN (${verification.QUEUE.map(() => '?').join(', ')})`);
+      params.push(...verification.QUEUE);
+    } else if (req.query.status) {
+      where.push('p.verification_status = ?'); params.push(req.query.status);
+    }
     if (req.query.q) {
       where.push('(p.provider_name LIKE ? OR p.location LIKE ? OR p.contact_email LIKE ?)');
       params.push(...Array(3).fill(`%${req.query.q}%`));
@@ -105,7 +125,7 @@ router.get(
        JOIN categories c ON c.category_id = p.category_id ${whereSql}`, params,
     );
     // The verification queue is worked oldest first; everything else newest first.
-    const order = req.query.status === 'pending'
+    const order = ['pending', 'queue'].includes(req.query.status)
       ? 'p.created_at ASC, p.provider_id ASC' : 'p.created_at DESC, p.provider_id DESC';
     const rows = await query(
       `SELECT p.provider_id, p.provider_name, p.category_id, c.category_name,
@@ -134,16 +154,37 @@ router.get(
     );
     if (!provider) return res.status(404).json({ error: 'provider not found' });
     const files = await query(
-      `SELECT media_id, file_path, media_type FROM provider_media
-       WHERE provider_id = ? ORDER BY media_id`, [req.params.id],
+      `SELECT m.media_id, m.file_path, m.media_type, m.document_type, m.version, m.expires_on,
+              m.review_status, m.review_note, m.reviewed_at, m.uploaded_at,
+              u.full_name AS reviewer_name
+       FROM provider_media m LEFT JOIN users u ON u.user_id = m.reviewed_by
+       WHERE m.provider_id = ? ORDER BY m.media_id`, [req.params.id],
     );
+    const events = await query(
+      `SELECT e.from_status, e.to_status, e.reason, e.created_at, u.full_name AS actor_name
+       FROM provider_verification_events e LEFT JOIN users u ON u.user_id = e.actor_id
+       WHERE e.provider_id = ? ORDER BY e.created_at DESC, e.event_id DESC LIMIT 50`,
+      [req.params.id],
+    );
+    const areaIds = (await query('SELECT area_id FROM provider_service_areas WHERE provider_id = ?',
+      [req.params.id])).map((r) => Number(r.area_id));
+    const required = verification.requiredFor(provider.category_id, await expiry.categoryMap());
+    const evidence = files.filter((f) => f.media_type === 'evidence');
+    const requirements = required.map((type) => ({
+      document_type: type,
+      label: verification.DOCUMENT_TYPES[type],
+      satisfied: !verification.missingDocuments([type], evidence).length,
+    }));
     const history = await query(
       `SELECT l.action_type, l.notes, l.performed_at, u.full_name AS admin_name
        FROM admin_logs l LEFT JOIN users u ON u.user_id = l.admin_id
        WHERE l.entity_affected = 'providers' AND l.entity_id = ?
        ORDER BY l.performed_at DESC, l.log_id DESC LIMIT 20`, [req.params.id],
     );
-    return res.json({ provider, media: files, history });
+    return res.json({
+      provider: { ...provider, area_ids: areaIds }, media: files, history, events, requirements,
+      next_states: verification.nextStates(provider.verification_status),
+    });
   }),
 );
 
@@ -155,7 +196,27 @@ const providerRules = [
   body('location').trim().isLength({ min: 2, max: 120 }),
   body('qualifications').optional({ values: 'falsy' }).trim().isLength({ max: 2000 }),
   body('contact_email').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
+  // Further areas served, beyond the primary location (which is always served).
+  body('area_ids').optional({ values: 'null' }).isArray({ max: 30 }),
+  body('area_ids.*').isInt({ min: 1 }).toInt(),
 ];
+
+/**
+ * Sets the areas a provider serves: its primary location (created as an area
+ * without coordinates if it is new) plus the chosen ones. Runs inside the
+ * caller's transaction.
+ */
+async function setServiceAreas(tx, providerId, location, areaIds = []) {
+  await tx.query('INSERT IGNORE INTO service_areas (area_name) VALUES (?)', [location.trim()]);
+  const [primary] = await tx.query('SELECT area_id FROM service_areas WHERE area_name = ?', [location.trim()]);
+  const ids = [...new Set([Number(primary.area_id), ...areaIds.map(Number)])];
+  await tx.query('DELETE FROM provider_service_areas WHERE provider_id = ?', [providerId]);
+  for (const id of ids) {
+    await tx.query(
+      `INSERT INTO provider_service_areas (provider_id, area_id)
+       SELECT ?, area_id FROM service_areas WHERE area_id = ?`, [providerId, id]);
+  }
+}
 
 /** Tags are stored the way the seed stores them: lowercase, hyphenated, comma separated. */
 const cleanTags = (tags) => {
@@ -194,8 +255,12 @@ router.post(
         [provider_name, category_id, service_description, cleanTags(service_tags), location,
           qualifications || null, contact_email || null],
       );
+      await setServiceAreas(tx, result.insertId, location, req.body.area_ids || []);
       // New listings start pending, so they are NOT recommendable yet (Table 4.4).
       await logAction(tx, req.user.user_id, 'create', 'providers', result.insertId);
+      await tx.query(
+        `INSERT INTO provider_verification_events (provider_id, from_status, to_status, actor_id)
+         VALUES (?, NULL, 'pending', ?)`, [result.insertId, req.user.user_id]);
       return result.insertId;
     });
     return res.status(201).json({ provider_id: id, verification_status: 'pending' });
@@ -226,6 +291,7 @@ router.put(
         [provider_name, category_id, service_description, cleanTags(service_tags), location,
           qualifications || null, contact_email || null, req.params.id],
       );
+      await setServiceAreas(tx, req.params.id, location, req.body.area_ids || []);
       await logAction(tx, req.user.user_id, 'update', 'providers', req.params.id);
     });
     // The content text changed, so the encoder must see it again.
@@ -238,39 +304,125 @@ router.put(
   '/providers/:id/verify',
   [
     idParam(),
-    body('verification_status').isIn(['pending', 'verified', 'rejected']),
+    body('verification_status').isIn(verification.STATES),
     body('note').optional({ values: 'falsy' }).trim().isLength({ max: 500 }),
   ],
   handleValidation,
   asyncRoute(async (req, res) => {
-    const { verification_status } = req.body;
+    const target = req.body.verification_status;
     const note = req.body.note || null;
-    // Table 4.4 alternative flow: a rejection says what further information is needed.
-    if (verification_status === 'rejected' && (!note || note.length < 5)) {
+    // Table 4.4 alternative flow: a rejection says what further information is
+    // needed; so does a request for more information or a suspension.
+    if (verification.REASON_REQUIRED.has(target) && (!note || note.length < 5)) {
       return res.status(422).json({
-        error: 'say what is missing when rejecting a listing',
-        details: [{ field: 'note', message: 'required when rejecting (at least 5 characters)' }],
+        error: `give a reason when moving a listing to "${verification.LABELS[target]}"`,
+        details: [{ field: 'note', message: 'required for this decision (at least 5 characters)' }],
       });
     }
-    const provider = await one(
-      'SELECT provider_id, verification_status FROM providers WHERE provider_id = ?',
-      [req.params.id]);
-    if (!provider) return res.status(404).json({ error: 'provider not found' });
 
-    await transaction(async (tx) => {
+    const outcome = await transaction(async (tx) => {
+      // Locked, so two administrators acting at once cannot both apply a move
+      // from the same starting state.
+      const provider = await tx.one(
+        `SELECT provider_id, category_id, verification_status FROM providers
+         WHERE provider_id = ? FOR UPDATE`, [req.params.id]);
+      if (!provider) return { status: 404, body: { error: 'provider not found' } };
+      const from = provider.verification_status;
+      const steps = verification.plan(from, target);
+      if (!steps) {
+        return {
+          status: 409,
+          body: {
+            error: `a listing that is "${verification.LABELS[from]}" cannot move to "${verification.LABELS[target]}"`,
+            allowed: verification.nextStates(from),
+          },
+        };
+      }
+      if (target === 'verified') {
+        const docs = await tx.query(
+          `SELECT document_type, expires_on, review_status FROM provider_media
+           WHERE provider_id = ? AND media_type = 'evidence'`, [provider.provider_id]);
+        const missing = verification.missingDocuments(
+          verification.requiredFor(provider.category_id, await expiry.categoryMap(tx)), docs);
+        if (missing.length) {
+          return {
+            status: 422,
+            body: {
+              error: 'accept a current copy of every required document before verifying',
+              missing_documents: missing,
+              details: missing.map((t) => ({
+                field: t, message: `${verification.DOCUMENT_TYPES[t]}: none accepted and current`,
+              })),
+            },
+          };
+        }
+      }
+      let prev = from;
+      for (const to of steps) {
+        await tx.query(
+          `INSERT INTO provider_verification_events (provider_id, from_status, to_status, reason, actor_id)
+           VALUES (?, ?, ?, ?, ?)`,
+          [provider.provider_id, prev, to, to === target ? note : null, req.user.user_id]);
+        prev = to;
+      }
       await tx.query('UPDATE providers SET verification_status = ? WHERE provider_id = ?',
-        [verification_status, req.params.id]);
-      await logAction(tx, req.user.user_id, `verify:${verification_status}`,
-        'providers', req.params.id, note);
+        [target, provider.provider_id]);
+      await logAction(tx, req.user.user_id, `verify:${target}`, 'providers', provider.provider_id, note);
+      return { status: 200, from, steps };
     });
+    if (outcome.status !== 200) return res.status(outcome.status).json(outcome.body);
 
     // Figure 4.4 steps 16-17: the searchable catalogue changed, so the content
     // feature vectors are re-indexed. A newly verified listing has no column in
     // the user-item matrix, so only the content component can reach it.
-    if (verification_status === 'verified' || provider.verification_status === 'verified') {
-      ml.reindexQuietly();
+    if (target === 'verified' || outcome.from === 'verified') ml.reindexQuietly();
+    return res.json({
+      status: 'updated', provider_id: req.params.id, verification_status: target, steps: outcome.steps,
+    });
+  }),
+);
+
+/** Accept or reject one piece of evidence. Rejection needs a reason. */
+router.put(
+  '/media/:mediaId/review',
+  [
+    idParam('mediaId'),
+    body('decision').isIn(['accepted', 'rejected']),
+    body('note').optional({ values: 'falsy' }).trim().isLength({ max: 500 }),
+  ],
+  handleValidation,
+  asyncRoute(async (req, res) => {
+    const note = req.body.note || null;
+    if (req.body.decision === 'rejected' && (!note || note.length < 5)) {
+      return res.status(422).json({
+        error: 'say why the document is not acceptable',
+        details: [{ field: 'note', message: 'required when rejecting (at least 5 characters)' }],
+      });
     }
-    return res.json({ status: 'updated', provider_id: req.params.id, verification_status });
+    const doc = await one(
+      `SELECT media_id, provider_id, media_type, document_type, version FROM provider_media
+       WHERE media_id = ?`, [req.params.mediaId]);
+    if (!doc || doc.media_type !== 'evidence') return res.status(404).json({ error: 'document not found' });
+    await transaction(async (tx) => {
+      await tx.query(
+        `UPDATE provider_media SET review_status = ?, review_note = ?, reviewed_by = ?,
+                reviewed_at = CURRENT_TIMESTAMP WHERE media_id = ?`,
+        [req.body.decision, note, req.user.user_id, doc.media_id]);
+      await logAction(tx, req.user.user_id, `document:${req.body.decision}`, 'providers',
+        doc.provider_id, `${doc.document_type} v${doc.version}${note ? ` - ${note}` : ''}`);
+    });
+    return res.json({ status: 'reviewed', media_id: doc.media_id, review_status: req.body.decision });
+  }),
+);
+
+/** Accepted documents expiring soon (default 30 days), for the dashboard. */
+router.get(
+  '/documents/expiring',
+  [q('days').optional().isInt({ min: 1, max: 365 }).toInt()],
+  handleValidation,
+  asyncRoute(async (req, res) => {
+    const documents = await expiry.expiringSoon(req.query.days || expiry.WARN_DAYS);
+    res.json({ days: req.query.days || expiry.WARN_DAYS, documents });
   }),
 );
 
@@ -300,12 +452,23 @@ router.delete(
 router.post(
   '/providers/:id/media',
   express.raw({ type: media.ACCEPTED, limit: media.MAX_BYTES }),
-  [idParam(), q('kind').isIn(['evidence', 'image'])],
+  [
+    idParam(),
+    q('kind').isIn(['evidence', 'image']),
+    // Evidence says what it is, so it can be matched to the category's requirements.
+    q('document_type').if(q('kind').equals('evidence'))
+      .isIn(Object.keys(verification.DOCUMENT_TYPES)).withMessage('choose a document type'),
+    q('expires_on').optional({ values: 'falsy' }).isISO8601({ strict: true })
+      .withMessage('use a date like 2027-06-30'),
+  ],
   handleValidation,
   asyncRoute(async (req, res) => {
     const provider = await one('SELECT provider_id FROM providers WHERE provider_id = ?',
       [req.params.id]);
     if (!provider) return res.status(404).json({ error: 'provider not found' });
+    const isEvidence = req.query.kind === 'evidence';
+    const docType = isEvidence ? req.query.document_type : null;
+    const expiresOn = isEvidence && req.query.expires_on ? req.query.expires_on.slice(0, 10) : null;
     const type = media.sniff(req.body);
     if (!type) {
       return res.status(415).json({ error: 'upload a PDF, PNG or JPEG file' });
@@ -317,9 +480,17 @@ router.post(
     let mediaId;
     try {
       mediaId = await transaction(async (tx) => {
+        // A new upload of the same document type is the next version; older
+        // versions stay on file for the record.
+        const [{ v }] = isEvidence ? await tx.query(
+          `SELECT COALESCE(MAX(version), 0) + 1 AS v FROM provider_media
+           WHERE provider_id = ? AND media_type = 'evidence' AND document_type = ?`,
+          [req.params.id, docType]) : [{ v: 1 }];
         const r = await tx.query(
-          'INSERT INTO provider_media (provider_id, file_path, media_type) VALUES (?, ?, ?)',
-          [req.params.id, name, req.query.kind]);
+          `INSERT INTO provider_media
+             (provider_id, file_path, media_type, document_type, version, expires_on, review_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [req.params.id, name, req.query.kind, docType, v, expiresOn, isEvidence ? 'pending' : null]);
         await logAction(tx, req.user.user_id, `upload:${req.query.kind}`, 'providers',
           req.params.id, String(req.get('X-File-Name') || name).slice(0, 200));
         return r.insertId;
@@ -328,7 +499,10 @@ router.post(
       media.remove(name);
       throw err;
     }
-    return res.status(201).json({ media_id: mediaId, media_type: req.query.kind, file_path: name });
+    return res.status(201).json({
+      media_id: mediaId, media_type: req.query.kind, file_path: name,
+      document_type: docType, expires_on: expiresOn,
+    });
   }),
 );
 
@@ -337,10 +511,16 @@ router.get(
   [idParam('mediaId')],
   handleValidation,
   asyncRoute(async (req, res) => {
-    const row = await one('SELECT file_path FROM provider_media WHERE media_id = ?',
+    const row = await one(
+      'SELECT media_id, provider_id, file_path, media_type, document_type FROM provider_media WHERE media_id = ?',
       [req.params.mediaId]);
     const file = row && media.resolve(row.file_path);
     if (!file || !fs.existsSync(file)) return res.status(404).json({ error: 'file not found' });
+    // Opening private evidence is itself an auditable action.
+    if (row.media_type === 'evidence') {
+      await logAction({ query }, req.user.user_id, 'document:view', 'providers', row.provider_id,
+        `${row.document_type || 'document'} #${row.media_id}`);
+    }
     res.type(media.mimeFor(row.file_path));
     res.set('Cache-Control', 'private, no-store');
     return res.sendFile(file);
@@ -365,10 +545,63 @@ router.delete(
   }),
 );
 
+/* --------------------------------------------------------- service areas */
+router.get('/areas', asyncRoute(async (_req, res) => {
+  const rows = await query(
+    `SELECT a.area_id, a.area_name, a.latitude, a.longitude, a.is_active,
+            COUNT(psa.provider_id) AS provider_count
+     FROM service_areas a LEFT JOIN provider_service_areas psa ON psa.area_id = a.area_id
+     GROUP BY a.area_id ORDER BY a.area_name`);
+  res.json({ areas: rows });
+}));
+
+const areaRules = [
+  body('area_name').trim().isLength({ min: 2, max: 120 }),
+  // Both or neither: an approximate centre for distance, never an address.
+  body('latitude').optional({ values: 'null' }).isFloat({ min: -1.6, max: -1.0 })
+    .withMessage('a latitude near Nairobi, between -1.6 and -1.0').toFloat(),
+  body('longitude').optional({ values: 'null' }).isFloat({ min: 36.5, max: 37.2 })
+    .withMessage('a longitude near Nairobi, between 36.5 and 37.2').toFloat(),
+  body('is_active').optional().isBoolean().toBoolean(),
+];
+const coordsPaired = (b) => (b.latitude == null) === (b.longitude == null);
+
+router.post('/areas', areaRules, handleValidation, asyncRoute(async (req, res) => {
+  if (!coordsPaired(req.body)) return res.status(422).json({ error: 'give both latitude and longitude, or neither' });
+  if (await one('SELECT area_id FROM service_areas WHERE LOWER(area_name) = LOWER(?)', [req.body.area_name])) {
+    return res.status(409).json({ error: 'that area already exists' });
+  }
+  const id = await transaction(async (tx) => {
+    const r = await tx.query(
+      'INSERT INTO service_areas (area_name, latitude, longitude, is_active) VALUES (?, ?, ?, ?)',
+      [req.body.area_name, req.body.latitude ?? null, req.body.longitude ?? null, req.body.is_active === false ? 0 : 1]);
+    await logAction(tx, req.user.user_id, 'create', 'service_areas', r.insertId, req.body.area_name);
+    return r.insertId;
+  });
+  areas.invalidate();
+  return res.status(201).json({ area_id: id });
+}));
+
+router.put('/areas/:id', [idParam(), ...areaRules], handleValidation, asyncRoute(async (req, res) => {
+  if (!coordsPaired(req.body)) return res.status(422).json({ error: 'give both latitude and longitude, or neither' });
+  const area = await one('SELECT area_id FROM service_areas WHERE area_id = ?', [req.params.id]);
+  if (!area) return res.status(404).json({ error: 'area not found' });
+  await transaction(async (tx) => {
+    await tx.query(
+      'UPDATE service_areas SET area_name = ?, latitude = ?, longitude = ?, is_active = ? WHERE area_id = ?',
+      [req.body.area_name, req.body.latitude ?? null, req.body.longitude ?? null,
+        req.body.is_active === false ? 0 : 1, req.params.id]);
+    await logAction(tx, req.user.user_id, 'update', 'service_areas', req.params.id, req.body.area_name);
+  });
+  areas.invalidate();
+  ml.reindexQuietly();          // distances in the ranking come from these centres
+  return res.json({ status: 'updated', area_id: req.params.id });
+}));
+
 /* ------------------------------------------------------------ categories */
 router.get('/categories', asyncRoute(async (_req, res) => {
   const rows = await query(
-    `SELECT c.category_id, c.category_name, c.description, c.parent_category_id,
+    `SELECT c.category_id, c.category_name, c.description, c.parent_category_id, c.required_documents,
             (SELECT COUNT(*) FROM providers p WHERE p.category_id = c.category_id) AS provider_count,
             (SELECT COUNT(*) FROM providers p WHERE p.category_id = c.category_id
                AND p.verification_status = 'verified') AS verified_count,
@@ -377,14 +610,19 @@ router.get('/categories', asyncRoute(async (_req, res) => {
      ORDER BY COALESCE(c.parent_category_id, c.category_id), c.parent_category_id IS NOT NULL,
               c.category_name`,
   );
-  res.json({ categories: rows });
+  res.json({ categories: rows, document_types: verification.DOCUMENT_TYPES });
 }));
 
 const categoryRules = [
   body('category_name').trim().isLength({ min: 2, max: 120 }),
   body('description').optional({ values: 'falsy' }).trim().isLength({ max: 1000 }),
   body('parent_category_id').optional({ values: 'null' }).isInt({ min: 1 }).toInt(),
+  // Documents a listing in this category needs before it can be verified.
+  // Empty means "inherit from the parent" (or identity only, at the top).
+  body('required_documents').optional({ values: 'null' }).isArray({ max: 6 }),
+  body('required_documents.*').isIn(Object.keys(verification.DOCUMENT_TYPES).filter((t) => t !== 'other')),
 ];
+const docList = (list) => (Array.isArray(list) && list.length ? [...new Set(list)].join(',') : null);
 
 /** The tree is two levels deep: service types, and the categories under them. */
 async function checkParent(parentId, selfId = null) {
@@ -412,8 +650,9 @@ router.post(
     }
     const id = await transaction(async (tx) => {
       const result = await tx.query(
-        `INSERT INTO categories (category_name, description, parent_category_id)
-         VALUES (?, ?, ?)`, [category_name, description || null, parent_category_id || null],
+        `INSERT INTO categories (category_name, description, parent_category_id, required_documents)
+         VALUES (?, ?, ?, ?)`,
+        [category_name, description || null, parent_category_id || null, docList(req.body.required_documents)],
       );
       await logAction(tx, req.user.user_id, 'create', 'categories', result.insertId);
       return result.insertId;
@@ -441,8 +680,10 @@ router.put(
     }
     await transaction(async (tx) => {
       await tx.query(
-        'UPDATE categories SET category_name = ?, description = ?, parent_category_id = ? WHERE category_id = ?',
-        [category_name, description || null, parent_category_id || null, req.params.id]);
+        `UPDATE categories SET category_name = ?, description = ?, parent_category_id = ?,
+                required_documents = ? WHERE category_id = ?`,
+        [category_name, description || null, parent_category_id || null,
+          docList(req.body.required_documents), req.params.id]);
       await logAction(tx, req.user.user_id, 'update', 'categories', req.params.id);
     });
     // The category name is part of every listing's content text.
@@ -519,7 +760,9 @@ router.put(
     if (!target) return res.status(404).json({ error: 'user not found' });
     if (target.role === req.body.role) return res.json({ status: 'unchanged', role: target.role });
     await transaction(async (tx) => {
-      await tx.query('UPDATE users SET role = ? WHERE user_id = ?', [req.body.role, req.params.id]);
+      // A role change also revokes the user's existing sessions.
+      await tx.query('UPDATE users SET role = ?, token_version = token_version + 1 WHERE user_id = ?',
+        [req.body.role, req.params.id]);
       const [{ admins }] = await tx.query("SELECT COUNT(*) AS admins FROM users WHERE role = 'admin'");
       if (!admins) {
         const err = new Error('the platform must keep at least one administrator');
@@ -529,6 +772,31 @@ router.put(
       await logAction(tx, req.user.user_id, `role:${req.body.role}`, 'users', req.params.id);
     });
     return res.json({ status: 'updated', user_id: req.params.id, role: req.body.role });
+  }),
+);
+
+/**
+ * Deletes a parent's account on request (for example, one who can no longer
+ * sign in). Administrators are refused: remove the role first. The audit entry
+ * keeps the user id only, not the name or email.
+ */
+router.delete(
+  '/users/:id',
+  [idParam(), body('reason').optional({ values: 'falsy' }).trim().isLength({ max: 500 })],
+  handleValidation,
+  asyncRoute(async (req, res) => {
+    const target = await one('SELECT user_id, role FROM users WHERE user_id = ?', [req.params.id]);
+    if (!target) return res.status(404).json({ error: 'user not found' });
+    if (target.role === 'admin') {
+      return res.status(409).json({ error: 'remove the administrator role before deleting this account' });
+    }
+    await transaction(async (tx) => {
+      await tx.query('DELETE FROM users WHERE user_id = ?', [req.params.id]);
+      await logAction(tx, req.user.user_id, 'user:delete', 'users', req.params.id,
+        req.body.reason || 'account deleted on request');
+    });
+    ml.reindexQuietly();
+    return res.json({ status: 'deleted', user_id: req.params.id });
   }),
 );
 
@@ -615,10 +883,37 @@ router.post('/model/reindex', asyncRoute(async (req, res) => {
   res.json(out);
 }));
 
+/**
+ * Builds and evaluates a candidate model version. It only replaces the
+ * production version if it passes the promotion gate in the ML service.
+ */
 router.post('/model/retrain', asyncRoute(async (req, res) => {
-  const out = await ml.retrain();
+  const out = await ml.retrain(`admin #${req.user.user_id}`);
   await logAction({ query }, req.user.user_id, 'model:retrain', 'model', null,
-    out.alpha !== undefined ? `alpha ${out.alpha} (${out.alpha_source})`.slice(0, 500) : null);
+    `candidate ${out.candidate?.id || '?'}: ${out.promoted ? 'promoted' : 'kept as candidate'} - ${out.reason || ''}`
+      .slice(0, 500));
+  res.json(out);
+}));
+
+router.get('/model/versions', asyncRoute(async (_req, res) => {
+  res.json(await ml.models());
+}));
+
+router.post(
+  '/model/versions/:versionId/promote',
+  [param('versionId').matches(/^v[0-9-]{8,30}$/)],
+  handleValidation,
+  asyncRoute(async (req, res) => {
+    const out = await ml.promote(req.params.versionId, `admin #${req.user.user_id}`);
+    await logAction({ query }, req.user.user_id, 'model:promote', 'model', null, req.params.versionId);
+    res.json(out);
+  }),
+);
+
+router.post('/model/rollback', asyncRoute(async (req, res) => {
+  const out = await ml.rollback(`admin #${req.user.user_id}`);
+  await logAction({ query }, req.user.user_id, 'model:rollback', 'model', null,
+    String(out.production?.id || out.version || ''));
   res.json(out);
 }));
 

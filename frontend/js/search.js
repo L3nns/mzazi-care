@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const p = UI.params();
   state = {
     q: p.q || '', type: p.type || '', category: p.category || '', location: p.location || '',
-    sort: p.sort || 'relevance', page: Number(p.page || 1),
+    within_km: p.within_km || '', sort: p.sort || 'relevance', page: Number(p.page || 1),
   };
   document.getElementById('q').value = state.q;
 
@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('f-location').innerHTML = '<option value="">Any location</option>'
     + locs.locations.map((l) => `<option value="${UI.esc(l.location)}"${l.location === state.location ? ' selected' : ''}>${UI.esc(l.location)}</option>`).join('');
   document.getElementById('f-sort').value = state.sort;
+  document.getElementById('f-within').value = state.within_km;
 
   document.getElementById('search-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -52,16 +53,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('f-type').addEventListener('change', (e) => {
     state.type = e.target.value; state.category = ''; fillCategories(); state.page = 1; run();
   });
-  ['f-category', 'f-location', 'f-sort'].forEach((id) => {
+  ['f-category', 'f-location', 'f-within', 'f-sort'].forEach((id) => {
     document.getElementById(id).addEventListener('change', () => {
       state.category = document.getElementById('f-category').value;
       state.location = document.getElementById('f-location').value;
+      state.within_km = document.getElementById('f-within').value;
       state.sort = document.getElementById('f-sort').value;
       state.page = 1; run();
     });
   });
   document.getElementById('clear-filters').addEventListener('click', () => {
-    state = { q: '', type: '', category: '', location: '', sort: 'relevance', page: 1 };
+    state = { q: '', type: '', category: '', location: '', within_km: '', sort: 'relevance', page: 1 };
+    document.getElementById('f-within').value = '';
     document.getElementById('q').value = '';
     document.getElementById('f-type').value = '';
     fillCategories();
@@ -104,7 +107,7 @@ function renderActiveFilters() {
   if (state.q) chips.push(['q', `“${state.q}”`]);
   if (state.type) chips.push(['type', name(state.type)]);
   if (state.category) chips.push(['category', name(state.category)]);
-  if (state.location) chips.push(['location', state.location]);
+  if (state.location) chips.push(['location', state.within_km ? `${state.location} + ${state.within_km} km` : state.location]);
   const box = document.getElementById('active-filters');
   box.innerHTML = chips.map(([k, label]) => `<button type="button" class="chip removable" data-clear="${k}"
       aria-label="Remove filter ${UI.esc(label)}">${UI.esc(label)} &times;</button>`).join('');
@@ -114,7 +117,10 @@ function renderActiveFilters() {
     if (k === 'q') document.getElementById('q').value = '';
     if (k === 'type') { state.category = ''; document.getElementById('f-type').value = ''; fillCategories(); }
     if (k === 'category') document.getElementById('f-category').value = '';
-    if (k === 'location') document.getElementById('f-location').value = '';
+    if (k === 'location') {
+      document.getElementById('f-location').value = '';
+      state.within_km = ''; document.getElementById('f-within').value = '';
+    }
     state.page = 1; run();
   }));
 }
@@ -127,10 +133,27 @@ async function loadResults(id) {
   try {
     const data = await API.search({ ...state, per_page: 10 });
     if (id !== runId) return;              // a newer search has started
+    // "a midwife near Kilimani": the server read the area out of the query.
+    // Adopt it as a visible, removable filter so nothing happens silently.
+    if (data.understood?.from_query) {
+      state.location = data.understood.location;
+      state.q = data.understood.query || '';
+      document.getElementById('q').value = state.q;
+      const sel = document.getElementById('f-location');
+      if ([...sel.options].some((o) => o.value === state.location)) sel.value = state.location;
+      history.replaceState(null, '', `search.html${API.qs(state)}`);
+      renderActiveFilters();
+      UI.toast(`Showing services in ${data.understood.location}, from your search`);
+    }
     document.getElementById('result-count').textContent =
       `${data.total} service${data.total === 1 ? '' : 's'} found`;
+    const origin = data.area?.name;
+    // Nothing clearly matched: show the closest services, and say so.
+    const weak = data.match_quality === 'weak'
+      ? `<p class="notice" role="note">None of these clearly matches “${UI.esc(state.q)}”. They are the
+         closest services listed here; check that one fits before contacting them.</p>` : '';
     box.innerHTML = data.results.length
-      ? data.results.map(UI.resultCard).join('')
+      ? weak + data.results.map((r) => UI.resultCard({ ...r, area_origin: origin })).join('')
       : `<div class="empty"><p>No services match ${state.q ? `“${UI.esc(state.q)}”` : 'those filters'}.</p>
          <p class="muted">Try removing a filter, or browse a broader category.</p></div>`;
     UI.pager(document.getElementById('pagination'), data, (n) => {
@@ -138,9 +161,12 @@ async function loadResults(id) {
     });
     if (data.suggestions?.length) {
       // Figure 4.5: never leave the parent at an empty page.
-      sugBox.innerHTML = `<h2 class="suggest-heading">${data.suggestion_basis === 'closest'
-        ? 'Closest services to what you asked for' : 'Popular and highly rated instead'}</h2>
-        ${data.suggestions.map(UI.resultCard).join('')}`;
+      const heading = {
+        nearby: `None in ${UI.esc(data.suggestion_origin)} — these are in nearby areas`,
+        closest: 'Closest services to what you asked for',
+      }[data.suggestion_basis] || 'Popular and highly rated instead';
+      sugBox.innerHTML = `<h2 class="suggest-heading">${heading}</h2>
+        ${data.suggestions.map((r) => UI.resultCard({ ...r, area_origin: data.suggestion_origin })).join('')}`;
     }
     UI.trackClicks(box);
     UI.trackClicks(sugBox);
@@ -164,20 +190,10 @@ async function loadRecommendations(id) {
     });
     if (id !== runId) return;
     note.textContent = strategyNote(data.strategy);
-    list.innerHTML = data.results.length ? data.results.map((r) => `
-      <div class="rec-item">
-        <a href="provider.html?id=${r.provider_id}" data-track="${r.provider_id}">${UI.esc(r.provider_name)}</a>
-        <div class="muted">${UI.esc(r.category_name || '')} &middot; ${UI.esc(r.location || '')}</div>
-        ${r.basis === 'related_highly_rated'
-    ? '<div class="basis-note">Highly rated in a related category</div>' : ''}
-        <div class="rec-meta">
-          ${r.hybrid_score !== undefined && r.basis === 'match'
-    ? `<span class="score" title="Combined match score (0 to 1)">Match ${Number(r.hybrid_score).toFixed(2)}</span>` : ''}
-          ${UI.stars(r.avg_rating, r.rating_count)}
-        </div>
-      </div>`).join('')
+    list.innerHTML = data.results.length ? data.results.map(UI.recItem).join('')
       : '<p class="muted">No suggestions yet — search or save a provider and they will appear.</p>';
     UI.trackClicks(list);
+    UI.bindFeedback(list);
   } catch {
     if (id !== runId) return;
     note.textContent = '';

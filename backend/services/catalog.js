@@ -66,6 +66,29 @@ function keywordSql(text) {
   return { where, params, score, scoreParams: [String(text), `%${text}%`, `%${text}%`] };
 }
 
+/**
+ * The same shape as keywordSql, for providers the engine matched by meaning:
+ * `ids` in the engine's order, best first. A literal name match is always
+ * included and ranks above every engine match, so typing a provider's name
+ * still finds it. Relevance is rank-based (n for the best match down to 1).
+ */
+function semanticSql(ids, text) {
+  const nameLike = `%${text}%`;
+  if (!ids.length) {
+    return { where: 'p.provider_name LIKE ?', params: [nameLike],
+      score: '((p.provider_name LIKE ?) * 1)', scoreParams: [nameLike] };
+  }
+  const marks = ids.map(() => '?').join(',');
+  const n = ids.length;
+  return {
+    where: `(p.provider_id IN (${marks}) OR p.provider_name LIKE ?)`,
+    params: [...ids, nameLike],
+    score: `(CASE p.provider_id ${ids.map(() => 'WHEN ? THEN ?').join(' ')} ELSE 0 END
+      + (p.provider_name LIKE ?) * ${n + 1})`,
+    scoreParams: [...ids.flatMap((id, i) => [id, n - i]), nameLike],
+  };
+}
+
 /** A category id plus its children, so a parent ("service type") filters its tree. */
 const CATEGORY_TREE_SQL = 'p.category_id IN (SELECT category_id FROM categories WHERE category_id = ? OR parent_category_id = ?)';
 
@@ -84,18 +107,24 @@ const RATING_COLUMNS = `
   (SELECT COUNT(*) FROM interactions r
     WHERE r.provider_id = p.provider_id AND r.interaction_type = 'rating') AS rating_count`;
 
-/** Adds the listing details cards need to bare engine results. */
+/**
+ * Adds the listing details cards need to bare engine results, and drops any
+ * listing that is no longer verified. The engine's index can lag a status
+ * change by a re-index, so eligibility is checked again here, at the moment
+ * results are served: a score never outranks verification.
+ */
 async function hydrate(results) {
   if (!results?.length) return [];
   const ids = results.map((r) => r.provider_id);
   const details = await query(
     `SELECT p.provider_id, p.service_tags, p.service_description, p.location,
             p.qualifications, p.verification_status
-     FROM providers p WHERE p.provider_id IN (${ids.map(() => '?').join(',')})`,
+     FROM providers p WHERE p.provider_id IN (${ids.map(() => '?').join(',')})
+       AND p.verification_status = 'verified'`,
     ids,
   );
   const byId = Object.fromEntries(details.map((d) => [d.provider_id, d]));
-  return results.map((r) => ({ ...r, ...(byId[r.provider_id] || {}) }));
+  return results.filter((r) => byId[r.provider_id]).map((r) => ({ ...r, ...byId[r.provider_id] }));
 }
 
 /** "Popular and highly rated" straight from SQL, for when the engine is down. */
@@ -103,7 +132,11 @@ async function popularSql({ topN = 10, category = null, location = null, exclude
   const where = ["p.verification_status = 'verified'"];
   const params = [];
   if (category) { where.push(CATEGORY_TREE_SQL); params.push(category, category); }
-  if (location) { where.push('p.location = ?'); params.push(location); }
+  if (location) {
+    // Lazy: areas.js needs nothing from here, but keep the load order obvious.
+    const cond = require('./areas').servesAreaSql([location]);
+    where.push(cond.sql); params.push(...cond.params);
+  }
   if (excludeUser) {
     where.push('p.provider_id NOT IN (SELECT provider_id FROM saved_services WHERE user_id = ?)');
     params.push(excludeUser);
@@ -126,6 +159,6 @@ async function popularSql({ topN = 10, category = null, location = null, exclude
 }
 
 module.exports = {
-  searchTerms, keywordSql, hydrate, popularSql, CATEGORY_TREE_SQL, RATING_COLUMNS,
+  searchTerms, keywordSql, semanticSql, hydrate, popularSql, CATEGORY_TREE_SQL, RATING_COLUMNS,
   CATEGORY_FILTER_JOIN,
 };

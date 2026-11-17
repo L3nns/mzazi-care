@@ -50,8 +50,17 @@ class DataSource:
     def load(self) -> dict[str, pd.DataFrame]:
         frames = self._load_mysql() if self.source == "mysql" else self._load_csv()
         for key in ("providers", "interactions", "categories", "users",
-                    "saved_services", "search_history", "user_preferences"):
+                    "saved_services", "search_history", "user_preferences",
+                    "service_areas"):
             frames.setdefault(key, pd.DataFrame())
+        # Without an explicit table, each provider serves its own location.
+        if "provider_service_areas" not in frames or frames["provider_service_areas"].empty:
+            prov = frames["providers"]
+            frames["provider_service_areas"] = (
+                prov[["provider_id", "location"]].dropna()
+                .rename(columns={"location": "area_name"})
+                if len(prov) and "location" in prov else pd.DataFrame(
+                    columns=["provider_id", "area_name"]))
         return frames
 
     def training_interactions(self, frames) -> pd.DataFrame:
@@ -67,7 +76,8 @@ class DataSource:
         out = {}
         for name in ("providers", "categories", "users", "interactions",
                      "saved_services", "interactions_train", "interactions_test",
-                     "search_history", "user_preferences"):
+                     "search_history", "user_preferences", "service_areas",
+                     "provider_service_areas"):
             f = d / f"{name}.csv"
             if f.exists():
                 out[name] = pd.read_csv(f)
@@ -106,13 +116,25 @@ class DataSource:
             "search_history": "SELECT user_id, query_text, searched_at "
                               "FROM search_history WHERE query_text IS NOT NULL",
             "user_preferences": "SELECT user_id, category_id FROM user_preferences",
+            "service_areas": "SELECT area_name, latitude, longitude FROM service_areas "
+                             "WHERE is_active = 1",
+            "provider_service_areas": """SELECT psa.provider_id, a.area_name
+                                         FROM provider_service_areas psa
+                                         JOIN service_areas a ON a.area_id = psa.area_id""",
         }
         conn = self._connect()
         try:
             out = {}
             for name, sql in queries.items():
                 with conn.cursor() as cur:
-                    cur.execute(sql)
+                    try:
+                        cur.execute(sql)
+                    except Exception as exc:          # a database not migrated yet
+                        if name in ("service_areas", "provider_service_areas"):
+                            log.warning("no %s table yet (%s); run the backend migrations",
+                                        name, exc)
+                            continue
+                        raise
                     out[name] = pd.DataFrame(cur.fetchall())
             log.info("loaded from MySQL (%d providers, %d interactions)",
                      len(out["providers"]), len(out["interactions"]))

@@ -30,7 +30,15 @@
       <h2>Filter results</h2>
       <div class="field"><label for="f-type">Service type</label><select id="f-type"></select></div>
       <div class="field"><label for="f-category">Service category</label><select id="f-category"></select></div>
-      <div class="field"><label for="f-location">Location</label><select id="f-location"></select></div>
+      <div class="field"><label for="f-location">Area</label><select id="f-location"></select></div>
+      <div class="field"><label for="f-within">Include nearby areas</label>
+        <select id="f-within" aria-describedby="within-help">
+          <option value="">This area only</option>
+          <option value="3">Within about 3 km</option>
+          <option value="5">Within about 5 km</option>
+          <option value="10">Within about 10 km</option>
+        </select>
+        <div class="muted" id="within-help">Measured between area centres, not addresses.</div></div>
       <div class="field"><label for="f-sort">Sort by</label>
         <select id="f-sort">
           <option value="relevance">Relevance</option>
@@ -38,6 +46,7 @@
           <option value="popular">Most viewed</option>
           <option value="newest">Newest</option>
           <option value="name">Name</option>
+          <option value="distance">Nearest to the chosen area</option>
         </select></div>
       <button class="btn secondary small" id="clear-filters" type="button">Clear all</button>
       <p class="muted verified-note">Verified providers only. Listings appear here
@@ -65,8 +74,15 @@
     </div>
   </div>
 </main>
-<footer style="border-top:1px solid var(--line);margin-top:2rem;padding:1.25rem 0;background:#fff">
-  <div class="container muted">Mzazi Care Discovery &amp; Catalog System · capstone prototype · seeded with synthetic data</div>
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <p class="safety-note"><strong>Mzazi Care helps you find services. It does not give medical advice.</strong>
+      Verification means an administrator has checked a provider's documents; it is not a guarantee of
+      clinical competence or safety. In an emergency, call <strong>999</strong> or <strong>112</strong>,
+      or go to the nearest hospital.</p>
+    <p class="muted">Mzazi Care Discovery &amp; Catalog System · capstone prototype · seeded with synthetic data ·
+      <a href="privacy.html">Privacy</a></p>
+  </div>
 </footer>
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>

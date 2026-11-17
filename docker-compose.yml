@@ -7,7 +7,7 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-mzazi_care}
       MYSQL_USER: ${DB_USER:-mzazi}
       MYSQL_PASSWORD: ${DB_PASSWORD:-mzazipass}
-    ports: ["3307:3306"]
+    ports: ["127.0.0.1:3307:3306"]   # host-only, for local tools
     volumes:
       - mysql_data:/var/lib/mysql
       # Both files run once, in name order, the first time the volume is created.
@@ -37,11 +37,12 @@ services:
       MZAZI_ALPHA: ${MZAZI_ALPHA:-auto}
       MZAZI_MIN_SIMILARITY: ${MZAZI_MIN_SIMILARITY:-auto}
       MZAZI_DIVERSITY_SHARE: ${MZAZI_DIVERSITY_SHARE:-0.2}
-      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:-dev-service-token}
+      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:?set ML_SERVICE_TOKEN in .env}
       MZAZI_MODEL_PATH: /app/model/hybrid_model.joblib
+      LOG_FORMAT: ${LOG_FORMAT:-json}
     volumes:
       - model_data:/app/model
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]   # host-only; browsers reach it through Express
     depends_on:
       mysql:
         condition: service_healthy
@@ -57,13 +58,20 @@ services:
       DB_NAME: ${DB_NAME:-mzazi_care}
       DB_USER: ${DB_USER:-mzazi}
       DB_PASSWORD: ${DB_PASSWORD:-mzazipass}
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (openssl rand -hex 32)}
       ML_SERVICE_URL: http://ml-service:8000
-      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:-dev-service-token}
+      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:?set ML_SERVICE_TOKEN in .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      TRUST_PROXY: ${TRUST_PROXY:-}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
       FRONTEND_DIR: /app/frontend
       UPLOAD_DIR: /app/uploads
+      OPENAPI_FILE: /app/openapi.yaml
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      SEARCH_MODE: ${SEARCH_MODE:-semantic}
     volumes:
       - ./frontend:/app/frontend:ro
+      - ./docs/api/openapi.yaml:/app/openapi.yaml:ro
       - uploads:/app/uploads
     ports: ["4000:4000"]
     depends_on:

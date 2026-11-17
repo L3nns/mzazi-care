@@ -1,0 +1,923 @@
+openapi: 3.0.3
+info:
+  title: Mzazi Care API
+  version: 1.3.0
+  description: |
+    REST API of the Mzazi Care Discovery & Catalog System (Express tier).
+
+    * Only `verified` listings are ever returned outside `/admin`.
+    * Authentication: `Authorization: Bearer <token>` from `/auth/login` or
+      `/auth/register`. Tokens are revoked on password change, role change and
+      `/auth/logout-all`.
+    * Every response carries `X-Request-Id`. Send your own (letters, digits,
+      `.`, `_`, `-`; at most 64) to correlate with the server logs.
+    * Validation failures are `422` with `{ error: "validation failed", details }`.
+    * Rate limits: 300 requests/minute on `/api`; 20 per 15 minutes on
+      `/auth/login` and `/auth/mfa/*`; 10 per hour on `/auth/register`.
+
+    The recommendation service (FastAPI, port 8000) is internal; its own
+    description is at `/docs` on that service. Browsers never call it.
+    This file is checked against the served routes by `backend/tests/openapi.test.js`.
+servers:
+  - url: /api
+security: []
+
+tags:
+  - name: auth
+  - name: catalogue
+  - name: activity
+  - name: recommendations
+  - name: admin
+    description: Administrator only (`role = admin`, re-checked on every request).
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    MediaId:
+      name: mediaId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+  responses:
+    Unauthorized:
+      description: Missing, invalid, expired or revoked token.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Not an administrator.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Not found (unverified listings are reported as not found).
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Invalid:
+      description: Validation failed.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+    ValidationError:
+      type: object
+      properties:
+        error: { type: string, example: validation failed }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+    Session:
+      type: object
+      properties:
+        token: { type: string }
+        user: { $ref: '#/components/schemas/User' }
+    MfaChallenge:
+      type: object
+      description: Returned by /auth/login instead of a session when two-step sign-in is on.
+      properties:
+        mfa_required: { type: boolean, example: true }
+        mfa_token: { type: string, description: Five-minute challenge for /auth/mfa/verify. }
+    User:
+      type: object
+      properties:
+        user_id: { type: integer }
+        full_name: { type: string }
+        email: { type: string, format: email }
+        location: { type: string, nullable: true }
+        phone_number: { type: string, nullable: true }
+        role: { type: string, enum: [user, admin] }
+        mfa_enabled: { type: boolean }
+    ProviderCard:
+      type: object
+      properties:
+        provider_id: { type: integer }
+        provider_name: { type: string }
+        category_id: { type: integer }
+        category_name: { type: string }
+        location: { type: string }
+        service_tags: { type: string }
+        avg_rating: { type: number, nullable: true }
+        rating_count: { type: integer }
+        serves_origin: { type: boolean, description: Present with an area filter. }
+        distance_km: { type: number, nullable: true, description: Between area centres; approximate. }
+    Reason:
+      type: object
+      properties:
+        code:
+          type: string
+          enum: [matches_search, matches_activity, matches_preferences, similar_parents,
+                 serves_area, nearby, well_rated, popular, related_highly_rated]
+        text: { type: string }
+    Recommendation:
+      allOf:
+        - $ref: '#/components/schemas/ProviderCard'
+        - type: object
+          properties:
+            rank_position: { type: integer }
+            basis: { type: string, enum: [match, popular, related_highly_rated] }
+            scores:
+              type: object
+              properties:
+                content: { type: number }
+                collaborative: { type: number }
+                location: { type: number, nullable: true }
+                quality: { type: number }
+                final: { type: number }
+            reasons:
+              type: array
+              items: { $ref: '#/components/schemas/Reason' }
+    ProviderInput:
+      type: object
+      required: [provider_name, category_id, service_description, location]
+      properties:
+        provider_name: { type: string, minLength: 2, maxLength: 150 }
+        category_id: { type: integer }
+        service_description: { type: string, minLength: 20, maxLength: 4000 }
+        service_tags: { type: string, maxLength: 255 }
+        location: { type: string, description: Primary service area. }
+        qualifications: { type: string, maxLength: 2000 }
+        contact_email: { type: string, format: email }
+        area_ids:
+          type: array
+          maxItems: 30
+          items: { type: integer }
+          description: Further service areas.
+    AreaInput:
+      type: object
+      required: [area_name]
+      properties:
+        area_name: { type: string, minLength: 2, maxLength: 120 }
+        latitude: { type: number, minimum: -1.6, maximum: -1.0, nullable: true, description: Approximate centre (Nairobi). }
+        longitude: { type: number, minimum: 36.5, maximum: 37.2, nullable: true }
+        is_active: { type: boolean }
+    CategoryInput:
+      type: object
+      required: [category_name]
+      properties:
+        category_name: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        parent_category_id: { type: integer, nullable: true }
+        required_documents:
+          type: array
+          maxItems: 6
+          items: { type: string, enum: [identity, qualification, professional_registration, business_registration, facility_licence] }
+    VerificationStatus:
+      type: string
+      enum: [draft, pending, under_review, needs_more_information, verified, rejected, suspended, expired]
+
+paths:
+  /health:
+    get:
+      tags: [catalogue]
+      summary: API and recommendation-service health
+      responses:
+        '200': { description: '`{ status, service, ml }`' }
+
+  /openapi.yaml:
+    get:
+      tags: [catalogue]
+      summary: This document
+      responses:
+        '200': { description: OpenAPI 3 description, YAML. }
+
+  # ------------------------------------------------------------------ auth
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Create a parent account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [full_name, email, password]
+              properties:
+                full_name: { type: string, minLength: 2, maxLength: 150 }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8, maxLength: 200 }
+                location: { type: string, maxLength: 120 }
+                phone_number: { type: string, maxLength: 20 }
+      responses:
+        '201': { description: Signed in., content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '409': { description: Email already registered. }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Sign in
+      description: Unknown email and wrong password give the same 401.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: A session, or a two-step challenge.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Session'
+                  - $ref: '#/components/schemas/MfaChallenge'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/mfa/verify:
+    post:
+      tags: [auth]
+      summary: Complete a two-step sign-in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mfa_token, code]
+              properties:
+                mfa_token: { type: string }
+                code: { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200': { description: Signed in., content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '401': { description: Wrong, reused or expired code or challenge. }
+  /auth/mfa/setup:
+    post:
+      tags: [auth]
+      summary: Start enrolling an authenticator app
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: '`{ secret, otpauth_uri }` - stored encrypted; not active until /mfa/enable.' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Already on. }
+  /auth/mfa/enable:
+    post:
+      tags: [auth]
+      summary: Confirm enrolment with a first code
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [code], properties: { code: { type: string, pattern: '^\d{6}$' } } } } }
+      responses:
+        '200': { description: Two-step sign-in is on. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /auth/mfa/disable:
+    post:
+      tags: [auth]
+      summary: Turn two-step sign-in off (password and a current code)
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password: { type: string }
+                code: { type: string, pattern: '^\d{6}$' }
+      responses:
+        '200': { description: Off. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: The signed-in user, with preferences
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: User and preferences. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [auth]
+      summary: Update profile
+      security: [{ bearer: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name: { type: string, minLength: 2, maxLength: 150 }
+                location: { type: string, maxLength: 120 }
+                phone_number: { type: string, maxLength: 20 }
+      responses:
+        '200': { description: Updated user. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Invalid' }
+    delete:
+      tags: [auth]
+      summary: Delete the account and everything recorded about it
+      description: |
+        Profile, preferences, saved services, searches, interactions, ratings,
+        feedback and logged recommendations are deleted; the recommendation
+        model is refitted. Administrators must have the role removed first.
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+                code: { type: string, pattern: '^\d{6}$', description: Required when two-step sign-in is on. }
+      responses:
+        '200': { description: Deleted. }
+        '401': { description: Wrong password or code. }
+        '409': { description: An administrator account. }
+  /auth/me/password:
+    put:
+      tags: [auth]
+      summary: Change password (signs out every other session)
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password: { type: string, minLength: 8, maxLength: 200 }
+      responses:
+        '200': { description: A new session for this device., content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Sign out of all devices
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Every existing token is revoked. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/me/preferences:
+    put:
+      tags: [auth]
+      summary: Replace declared category preferences
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_ids]
+              properties:
+                category_ids: { type: array, maxItems: 30, items: { type: integer } }
+                preferred_location: { type: string, nullable: true, maxLength: 120 }
+      responses:
+        '200': { description: Saved. }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /auth/me/searches:
+    get:
+      tags: [auth]
+      summary: The user's search history
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Recent searches. }
+    delete:
+      tags: [auth]
+      summary: Clear the user's search history
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Cleared. }
+
+  # ------------------------------------------------------------- catalogue
+  /categories:
+    get:
+      tags: [catalogue]
+      summary: Category tree with verified-listing counts
+      responses:
+        '200': { description: Categories. }
+  /services:
+    get:
+      tags: [catalogue]
+      summary: Search and browse verified listings
+      description: |
+        Free text (`q`) is matched by meaning through the recommendation
+        engine (`search_mode: semantic`), or by keyword SQL when the engine is
+        unreachable or `SEARCH_MODE=keyword` (`search_mode: keyword`). A
+        listing whose name contains the text always matches. A place named in
+        the text ("a midwife near Kilimani") becomes the area filter and is
+        reported in `understood`. When nothing matches, `suggestions` holds
+        nearby or related listings, labelled by `suggestion_basis`.
+        Searches by signed-in users are added to their history.
+      security: [{ bearer: [] }, {}]
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: category, in: query, schema: { type: integer } }
+        - { name: type, in: query, description: Top-level category (filters its subtree)., schema: { type: integer } }
+        - { name: location, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: within_km, in: query, description: Also include areas whose centre is this close., schema: { type: number, minimum: 1, maximum: 50 } }
+        - { name: sort, in: query, schema: { type: string, enum: [relevance, rating, popular, newest, name, distance] } }
+        - $ref: '#/components/parameters/Page'
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 12 } }
+      responses:
+        '200':
+          description: One page of results.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  page: { type: integer }
+                  per_page: { type: integer }
+                  pages: { type: integer }
+                  results: { type: array, items: { $ref: '#/components/schemas/ProviderCard' } }
+                  search_mode: { type: string, enum: [semantic, keyword] }
+                  match_quality:
+                    type: string
+                    enum: [good, weak]
+                    description: Semantic mode with results. `weak` - nothing clearly matches the text; the results are the five closest listings.
+                  understood:
+                    type: object
+                    properties:
+                      location: { type: string }
+                      from_query: { type: boolean }
+                      original_query: { type: string }
+                      query: { type: string, nullable: true }
+                  area:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      searched: { type: array, items: { type: string } }
+                      within_km: { type: number, nullable: true }
+                  suggestions: { type: array, items: { $ref: '#/components/schemas/ProviderCard' } }
+                  suggestion_basis: { type: string, enum: [nearby, closest, popular] }
+                  suggestion_origin: { type: string }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /services/locations:
+    get:
+      tags: [catalogue]
+      summary: Active service areas
+      responses:
+        '200': { description: '`{ locations: [{ location, has_coordinates, provider_count }] }`' }
+  /services/media/{mediaId}:
+    get:
+      tags: [catalogue]
+      summary: A public listing image (never verification evidence)
+      parameters: [{ $ref: '#/components/parameters/MediaId' }]
+      responses:
+        '200': { description: The image. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /services/{id}:
+    get:
+      tags: [catalogue]
+      summary: One verified listing, with areas served, images and similar listings
+      security: [{ bearer: [] }, {}]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: The listing. }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -------------------------------------------------------------- activity
+  /interactions:
+    post:
+      tags: [activity]
+      summary: Record a view, click, save or rating
+      description: |
+        A rating is one per user and provider: rating again replaces it (200,
+        `updated: true`). A view is counted at most once per user, provider and
+        day; a repeat returns 200 with `recorded: false`.
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider_id, interaction_type]
+              properties:
+                provider_id: { type: integer }
+                interaction_type: { type: string, enum: [view, click, save, rating] }
+                rating_value: { type: integer, minimum: 1, maximum: 5, nullable: true }
+      responses:
+        '200': { description: An existing rating was changed, or a repeat view was not counted. }
+        '201': { description: Recorded. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /interactions/me:
+    get:
+      tags: [activity]
+      summary: The user's recent activity
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Activity. }
+  /saved:
+    get:
+      tags: [activity]
+      summary: Saved listings
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Saved listings. }
+  /saved/{providerId}:
+    delete:
+      tags: [activity]
+      summary: Remove a saved listing
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: providerId, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Removed. }
+        '404': { description: Not saved. }
+
+  # ------------------------------------------------------- recommendations
+  /recommendations:
+    get:
+      tags: [recommendations]
+      summary: Personalised (or, anonymously, popular) recommendations with reasons
+      security: [{ bearer: [] }, {}]
+      parameters:
+        - { name: query, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: top_n, in: query, schema: { type: integer, minimum: 1, maximum: 30 } }
+        - { name: category, in: query, schema: { type: integer } }
+        - { name: type, in: query, schema: { type: integer } }
+        - { name: location, in: query, description: Hard area filter., schema: { type: string, maxLength: 120 } }
+        - { name: alpha, in: query, schema: { type: number, minimum: 0, maximum: 1 } }
+        - { name: use_home_area, in: query, description: Rank by distance from the user's home area (default true)., schema: { type: boolean } }
+      responses:
+        '200':
+          description: Ranked list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  strategy: { type: string, enum: [hybrid, content_only, collaborative_only, popularity_fallback] }
+                  version: { type: string }
+                  area: { type: string, nullable: true }
+                  results: { type: array, items: { $ref: '#/components/schemas/Recommendation' } }
+  /recommendations/feedback:
+    post:
+      tags: [recommendations]
+      summary: '"Not for me" feedback; anything but `relevant` hides the listing for this user'
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider_id, feedback]
+              properties:
+                provider_id: { type: integer }
+                feedback: { type: string, enum: [relevant, not_relevant, too_far, wrong_category, already_contacted] }
+      responses:
+        '201': { description: '`{ hidden: boolean }`' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+
+  # ----------------------------------------------------------------- admin
+  /admin/stats:
+    get:
+      tags: [admin]
+      summary: Dashboard counts (per verification state, queue, expiring documents, MFA)
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Counts. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/logs:
+    get:
+      tags: [admin]
+      summary: Audit log
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200': { description: Entries, newest first. }
+  /admin/providers:
+    get:
+      tags: [admin]
+      summary: Listings in any state
+      security: [{ bearer: [] }]
+      parameters:
+        - name: status
+          in: query
+          description: A verification state, or `queue` (pending and under review).
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/VerificationStatus'
+              - { type: string, enum: [queue] }
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: category, in: query, schema: { type: integer } }
+        - $ref: '#/components/parameters/Page'
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: Listings. }
+    post:
+      tags: [admin]
+      summary: Create a listing (starts as pending)
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProviderInput' } } }
+      responses:
+        '201': { description: Created. }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /admin/providers/{id}:
+    get:
+      tags: [admin]
+      summary: A listing with documents, verification history, requirements and allowed moves
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Listing detail. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [admin]
+      summary: Edit a listing
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProviderInput' } } }
+      responses:
+        '200': { description: Updated. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+    delete:
+      tags: [admin]
+      summary: Delete a listing
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Deleted. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/providers/{id}/verify:
+    put:
+      tags: [admin]
+      summary: Move a listing through the verification workflow
+      description: |
+        Illegal moves are 409 with the allowed ones. Rejection, more-information
+        requests and suspension need a `note`. Verifying needs an accepted,
+        current copy of every document the category requires (else 422 with
+        `missing_documents`).
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verification_status]
+              properties:
+                verification_status: { $ref: '#/components/schemas/VerificationStatus' }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Moved; every step recorded. }
+        '409': { description: Not allowed from the current state. }
+        '422': { description: Missing note or documents. }
+  /admin/providers/{id}/media:
+    post:
+      tags: [admin]
+      summary: Upload a listing image or a verification document
+      description: Raw body; type checked by content (PDF, PNG, JPEG), not by name.
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - { name: kind, in: query, required: true, schema: { type: string, enum: [evidence, image] } }
+        - name: document_type
+          in: query
+          description: Required for evidence.
+          schema: { type: string, enum: [identity, qualification, professional_registration, business_registration, facility_licence, other] }
+        - { name: expires_on, in: query, schema: { type: string, format: date } }
+      requestBody:
+        required: true
+        content:
+          application/pdf: { schema: { type: string, format: binary } }
+          image/png: { schema: { type: string, format: binary } }
+          image/jpeg: { schema: { type: string, format: binary } }
+      responses:
+        '201': { description: Stored (evidence is versioned per document type). }
+        '415': { description: Content is not an allowed type. }
+  /admin/media/{mediaId}:
+    get:
+      tags: [admin]
+      summary: Download an image or document (document views are audited)
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/MediaId' }]
+      responses:
+        '200': { description: The file. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [admin]
+      summary: Delete an image or document
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/MediaId' }]
+      responses:
+        '200': { description: Deleted. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/media/{mediaId}/review:
+    put:
+      tags: [admin]
+      summary: Accept or reject a verification document
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/MediaId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [accepted, rejected] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Reviewed. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/documents/expiring:
+    get:
+      tags: [admin]
+      summary: Accepted documents of verified listings that expire soon
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
+      responses:
+        '200': { description: '`{ days, documents }`' }
+  /admin/areas:
+    get:
+      tags: [admin]
+      summary: Service areas, with listing counts
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Areas. }
+    post:
+      tags: [admin]
+      summary: Add a service area
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AreaInput' } } }
+      responses:
+        '201': { description: Created. }
+        '409': { description: Name already used. }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /admin/areas/{id}:
+    put:
+      tags: [admin]
+      summary: Edit a service area
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AreaInput' } } }
+      responses:
+        '200': { description: Updated. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/categories:
+    get:
+      tags: [admin]
+      summary: Categories with required documents and the document types available
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Categories. }
+    post:
+      tags: [admin]
+      summary: Add a category
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CategoryInput' } } }
+      responses:
+        '201': { description: Created. }
+        '409': { description: Name already used. }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /admin/categories/{id}:
+    put:
+      tags: [admin]
+      summary: Edit a category
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CategoryInput' } } }
+      responses:
+        '200': { description: Updated. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Name already used. }
+    delete:
+      tags: [admin]
+      summary: Delete a category with no listings
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Deleted. }
+        '409': { description: Still in use. }
+  /admin/users:
+    get:
+      tags: [admin]
+      summary: User accounts
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: role, in: query, schema: { type: string, enum: [user, admin] } }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200': { description: Users. }
+  /admin/users/{id}:
+    delete:
+      tags: [admin]
+      summary: Delete a parent's account (audited; administrators are refused)
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Deleted. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: An administrator account. }
+  /admin/users/{id}/role:
+    put:
+      tags: [admin]
+      summary: Change a user's role (revokes their sessions; not your own)
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [role], properties: { role: { type: string, enum: [user, admin] } } } } }
+      responses:
+        '200': { description: Changed. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: Your own role, or invalid. }
+  /admin/reports:
+    get:
+      tags: [admin]
+      summary: Usage, search and recommendation reports
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: period, in: query, schema: { type: string, enum: ['7', '30', '90', all] } }
+      responses:
+        '200': { description: Report tables. }
+  /admin/model/reindex:
+    post:
+      tags: [admin]
+      summary: Refit the serving model on current data (same parameters)
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Done. }
+        '409': { description: A rebuild is already running. }
+  /admin/model/retrain:
+    post:
+      tags: [admin]
+      summary: Train and evaluate a candidate; it serves only if it passes the gate
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: '`{ candidate, promoted, reason, ... }`' }
+        '409': { description: A rebuild is already running. }
+  /admin/model/versions:
+    get:
+      tags: [admin]
+      summary: Model versions, newest first, and which one serves
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Versions. }
+  /admin/model/versions/{versionId}/promote:
+    post:
+      tags: [admin]
+      summary: Serve a version (audited)
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: versionId, in: path, required: true, schema: { type: string, pattern: '^v[0-9-]{8,30}$' } }
+      responses:
+        '200': { description: Serving. }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /admin/model/rollback:
+    post:
+      tags: [admin]
+      summary: Return to the previous production version (audited)
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: Serving the previous version. }
+        '409': { description: Nothing to roll back to. }

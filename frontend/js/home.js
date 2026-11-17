@@ -55,14 +55,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const data = await API.recommendations({ top_n: 4 });
     list.innerHTML = data.results?.length
-      ? `<div class="rec-grid">${data.results.map((r) => `
-          <div class="rec-item">
-            <a href="provider.html?id=${r.provider_id}" data-track="${r.provider_id}">${UI.esc(r.provider_name)}</a>
-            <div class="muted">${UI.esc(r.category_name || '')} ${UI.stars(r.avg_rating, r.rating_count)}</div>
-          </div>`).join('')}</div>
+      ? `<div class="rec-grid">${data.results.map(UI.recItem).join('')}</div>
         <p style="margin-top:.5rem"><a href="search.html">See more recommendations</a></p>`
       : '<p class="muted">Search or save a provider and suggestions will appear here.</p>';
     UI.trackClicks(list);
+    UI.bindFeedback(list);
   } catch {
     recBox.classList.add('hidden');     // signed in but the service is down
   }

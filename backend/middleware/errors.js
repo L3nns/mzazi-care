@@ -1,3 +1,5 @@
+const { log } = require('../services/logger');
+
 function notFound(_req, res) {
   res.status(404).json({ error: 'not found' });
 }
@@ -5,7 +7,7 @@ function notFound(_req, res) {
 /* eslint-disable no-unused-vars */
 function errorHandler(err, _req, res, _next) {
   const status = err.status || 500;
-  if (status >= 500) console.error('[error]', err);
+  if (status >= 500) log.error('unhandled error', { err });
   res.status(status).json({
     error: status >= 500 ? 'internal server error' : err.message,
     ...(process.env.NODE_ENV !== 'production' && status >= 500

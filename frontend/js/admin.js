@@ -24,16 +24,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   show(VIEWS[start] ? start : 'dashboard');
 });
 
+// Verification document types; the server's list replaces this on load.
+let DOC_LABELS = {
+  identity: 'Identity document', qualification: 'Qualification certificate',
+  professional_registration: 'Professional registration', business_registration: 'Business registration',
+  facility_licence: 'Facility licence', other: 'Other supporting document',
+};
+
 async function loadCategories() {
-  try { categories = (await API.adminCategories()).categories; } catch { categories = []; }
+  try {
+    const out = await API.adminCategories();
+    categories = out.categories;
+    if (out.document_types) DOC_LABELS = out.document_types;
+  } catch { categories = []; }
 }
 
 const VIEWS = {
   dashboard: () => dashboard(),
-  pending: () => listings({ status: 'pending' }),
+  pending: () => listings({ status: 'queue' }),
   listings: () => listings({}),
   form: () => providerForm(null),
   categories: () => categoryAdmin(),
+  areas: () => areaAdmin(),
   users: () => users({}),
   reports: () => reports('all'),
   logs: () => logs(1),
@@ -51,34 +63,61 @@ function show(name, ...args) {
 
 async function refreshPendingCount() {
   try {
-    const { total } = await API.adminProviders({ status: 'pending', per_page: 1 });
+    const { total } = await API.adminProviders({ status: 'queue', per_page: 1 });
     const el = document.getElementById('pending-count');
     el.textContent = total;
     el.classList.toggle('hidden', !total);
   } catch { /* badge simply stays as it was */ }
 }
 
-/** Approve straight away; reject only with a reason (Table 4.4). */
+/* What each workflow move is called on a button, what it needs and what it says afterwards. */
+const MOVES = {
+  pending: { button: 'Submit for review', done: 'Submitted for review' },
+  under_review: { button: 'Start review', done: 'Review started' },
+  verified: {
+    button: 'Approve',
+    done: 'Approved — the listing is now searchable and the catalogue is being re-indexed',
+  },
+  needs_more_information: {
+    button: 'Ask for more information', reason: 'Ask for more information',
+    help: 'Say exactly which document or detail the provider must supply.',
+    done: 'Marked as needing more information; the request is in its history',
+  },
+  rejected: {
+    button: 'Reject', reason: 'Reject', danger: true,
+    help: 'Say why the listing cannot be accepted. The provider may resubmit.',
+    done: 'Listing rejected; the reason is in its history',
+  },
+  suspended: {
+    button: 'Suspend', reason: 'Suspend', danger: true,
+    help: 'Say why the listing is suspended. It leaves search and recommendations at once.',
+    done: 'Listing suspended and removed from search',
+  },
+  expired: { button: 'Mark expired', done: 'Listing marked expired and removed from search' },
+};
+
+/** Moves a listing; asks for a reason first where the workflow requires one. */
 async function setStatus(id, status, name = 'this listing') {
+  const move = MOVES[status] || {};
   let note = null;
-  if (status === 'rejected') {
-    note = await askReason(name);
+  if (move.reason) {
+    note = await askReason(name, move);
     if (!note) return false;
   }
   try {
     await API.adminVerify(id, status, note);
-    UI.toast(status === 'verified'
-      ? 'Approved — the listing is now searchable and the catalogue is being re-indexed'
-      : status === 'rejected' ? 'Listing rejected; the reason is in its history' : 'Returned to pending');
+    UI.toast(move.done || 'Status updated');
     refreshPendingCount();
     return true;
   } catch (err) { UI.toast(errText(err), true); return false; }
 }
 
-function askReason(name) {
+function askReason(name, move = MOVES.rejected) {
   const dialog = document.getElementById('reason-dialog');
   const text = document.getElementById('reason-text');
-  document.getElementById('reason-title').textContent = `Reject ${name}`;
+  document.getElementById('reason-title').textContent = `${move.reason}: ${name}`;
+  document.getElementById('reason-help').textContent = move.help;
+  document.getElementById('reason-ok').textContent = move.reason;
   text.value = '';
   return new Promise((resolve) => {
     const done = () => {
@@ -96,35 +135,52 @@ function askReason(name) {
 async function dashboard() {
   loading();
   try {
-    const [s, pending, recent] = await Promise.all([
+    const [s, pending, recent, expiring] = await Promise.all([
       API.adminStats(),
-      API.adminProviders({ status: 'pending', per_page: 5 }),
+      API.adminProviders({ status: 'queue', per_page: 5 }),
       API.adminLogs({ limit: 6 }),
+      API.adminExpiringDocuments(),
     ]);
     const model = s.model?.config || {};
     const metrics = s.model?.metrics || {};
     view().innerHTML = `
+      ${s.mfa_enabled ? '' : `<div class="notice" role="status">
+        <strong>Turn on two-step sign-in.</strong> Your account can approve listings and change roles;
+        a password alone is not enough protection.
+        <a href="account.html?tab=password">Set it up</a></div>`}
       <div class="stat-row">
-        ${[['Total listings', s.total_providers], ['Verified', s.verified],
-    ['Pending', s.pending], ['Searches this week', s.searches_this_week]]
+        ${[['Verified listings', s.verified], ['Waiting for review', s.queue],
+    ['Needs more information', s.needs_more_information], ['Documents expiring (30 days)', s.documents_expiring]]
     .map(([l, v]) => `<div class="stat"><div class="label">${l}</div><div class="value">${Number(v).toLocaleString()}</div></div>`).join('')}
       </div>
+      <p class="muted">Also: ${Number(s.suspended)} suspended · ${Number(s.expired)} expired ·
+        ${Number(s.rejected)} rejected · ${Number(s.searches_this_week).toLocaleString()} searches this week</p>
       <div class="layout dash-layout">
         <div class="panel">
-          <div class="panel-head"><h2>Pending verification queue</h2>
-            <button class="btn secondary small" type="button" id="all-pending">View all pending</button></div>
+          <div class="panel-head"><h2>Verification queue</h2>
+            <button class="btn secondary small" type="button" id="all-pending">View the whole queue</button></div>
           ${pending.providers.length ? `<div class="table-wrap"><table>
-            <thead><tr><th>Provider</th><th>Category</th><th>Submitted</th><th>Evidence</th><th>Action</th></tr></thead>
+            <thead><tr><th>Provider</th><th>Category</th><th>Status</th><th>Submitted</th><th>Documents</th><th>Action</th></tr></thead>
             <tbody>${pending.providers.map((p) => `<tr>
               <td><a href="#" data-review="${p.provider_id}">${UI.esc(p.provider_name)}</a></td>
               <td>${UI.esc(p.category_name)}</td>
+              <td>${UI.statusBadge(p.verification_status)}</td>
               <td>${UI.fmtDate(p.created_at)}</td>
               <td>${p.evidence_count ? `${p.evidence_count} file${p.evidence_count > 1 ? 's' : ''}` : '<span class="muted">none</span>'}</td>
               <td class="actions">
-                <button class="btn small" type="button" data-approve="${p.provider_id}">Approve</button>
-                <button class="btn secondary small" type="button" data-reject="${p.provider_id}" data-name="${UI.esc(p.provider_name)}">Reject</button>
+                <button class="btn small" type="button" data-review="${p.provider_id}">Review</button>
               </td></tr>`).join('')}</tbody></table></div>`
     : '<div class="empty"><p>The queue is empty.</p></div>'}
+          <h3 style="margin-top:1rem">Documents expiring soon</h3>
+          ${expiring.documents.length ? `<div class="table-wrap"><table>
+            <thead><tr><th>Provider</th><th>Document</th><th>Expires</th></tr></thead>
+            <tbody>${expiring.documents.map((d) => `<tr>
+              <td><a href="#" data-review="${d.provider_id}">${UI.esc(d.provider_name)}</a></td>
+              <td>${UI.esc(DOC_LABELS[d.document_type] || d.document_type)} (v${Number(d.version)})</td>
+              <td>${UI.fmtDate(d.expires_on)} · ${Number(d.days_left) < 0 ? '<strong>expired</strong>'
+    : `${Number(d.days_left)} day${Number(d.days_left) === 1 ? '' : 's'} left`}</td>
+            </tr>`).join('')}</tbody></table></div>`
+    : `<p class="muted">No accepted document expires in the next ${Number(expiring.days)} days.</p>`}
         </div>
         <div class="panel rec-panel">
           <h2>Model status</h2>
@@ -144,11 +200,13 @@ async function dashboard() {
             <button class="btn small" type="button" id="reindex">Re-index catalogue</button>
             <button class="btn secondary small" type="button" id="retrain">Retrain model</button>
           </div>
-          <p class="muted" style="margin-top:.5rem">Re-index recomputes the service embeddings.
-            Retrain also rebuilds the user-item matrix and reviews &alpha;.</p>`
+          <p class="muted" style="margin-top:.5rem">Re-index refits the serving version on the current catalogue.
+            Retrain builds a new candidate version, choosing &alpha; and the location and quality weights
+            on validation data; it serves only if it scores no worse than the current version.</p>`
     : '<p class="error-text">The recommendation service is unreachable. Search still works; recommendations fall back to popular services.</p>'}
         </div>
       </div>
+      <div class="panel" style="margin-top:1rem" id="model-versions"></div>
       <div class="panel" style="margin-top:1rem">
         <div class="panel-head"><h2>Recent administrative activity</h2>
           <button class="btn secondary small" type="button" id="all-logs">Full activity log</button></div>
@@ -161,13 +219,7 @@ async function dashboard() {
     v.querySelectorAll('[data-review]').forEach((a) => a.addEventListener('click', (e) => {
       e.preventDefault(); show('form', Number(a.dataset.review));
     }));
-    v.querySelectorAll('[data-approve]').forEach((b) => b.addEventListener('click', async () => {
-      b.disabled = true;
-      if (await setStatus(b.dataset.approve, 'verified')) dashboard(); else b.disabled = false;
-    }));
-    v.querySelectorAll('[data-reject]').forEach((b) => b.addEventListener('click', async () => {
-      if (await setStatus(b.dataset.reject, 'rejected', b.dataset.name)) dashboard();
-    }));
+    modelVersions(v.querySelector('#model-versions'));
     bindModelButton('reindex', API.adminReindex, 'Re-index catalogue');
     bindModelButton('retrain', API.adminRetrain, 'Retrain model');
   } catch (err) { failed(err); }
@@ -180,7 +232,9 @@ function bindModelButton(id, fn, label) {
     el.disabled = true; el.textContent = 'Working…';
     try {
       const out = await fn();
-      UI.toast(`${label} finished in ${out.seconds ?? '?'}s${out.alpha !== undefined ? ` · α ${out.alpha}` : ''}`);
+      UI.toast(out.candidate
+        ? `Candidate ${out.candidate.id} ${out.promoted ? 'is now serving' : 'was kept as a candidate'}: ${out.reason}`
+        : `${label} finished in ${out.seconds ?? '?'}s`);
       dashboard();
     } catch (err) { UI.toast(err.message, true); el.disabled = false; el.textContent = label; }
   });
@@ -192,7 +246,7 @@ async function listings(filters) {
   loading();
   try {
     const data = await API.adminProviders({ ...f, per_page: 20 });
-    const title = f.status === 'pending' ? 'Pending verification' : 'Provider listings';
+    const title = f.status === 'queue' ? 'Verification queue' : 'Provider listings';
     view().innerHTML = `
       <div class="panel">
         <div class="panel-head"><h2>${title} (${data.total})</h2>
@@ -200,7 +254,8 @@ async function listings(filters) {
         <form class="toolbar" id="list-filters">
           <input id="lf-q" placeholder="Search name, area or email" value="${UI.esc(f.q)}" aria-label="Search listings">
           <select id="lf-status" aria-label="Status">
-            ${['', 'pending', 'verified', 'rejected'].map((s) => `<option value="${s}"${s === f.status ? ' selected' : ''}>${s ? s[0].toUpperCase() + s.slice(1) : 'Any status'}</option>`).join('')}
+            ${[['', 'Any status'], ['queue', 'Waiting for review'], ...Object.entries(UI.STATUS_LABELS)]
+    .map(([s, label]) => `<option value="${s}"${s === f.status ? ' selected' : ''}>${UI.esc(label)}</option>`).join('')}
           </select>
           <select id="lf-category" aria-label="Category">${UI.categoryOptions(categories, f.category)}</select>
           <button class="btn secondary small" type="submit">Apply</button>
@@ -216,11 +271,7 @@ async function listings(filters) {
               <td>${p.evidence_count || '<span class="muted">0</span>'}</td>
               <td>${UI.fmtDate(p.created_at)}</td>
               <td class="actions">
-                ${p.verification_status !== 'verified'
-    ? `<button class="btn small" type="button" data-verify="${p.provider_id}">Approve</button>` : ''}
-                ${p.verification_status !== 'rejected'
-    ? `<button class="btn secondary small" type="button" data-reject="${p.provider_id}" data-name="${UI.esc(p.provider_name)}">Reject</button>` : ''}
-                <button class="btn secondary small" type="button" data-edit="${p.provider_id}">Edit</button>
+                <button class="btn secondary small" type="button" data-edit="${p.provider_id}">Review / edit</button>
                 <button class="btn danger small" type="button" data-delete="${p.provider_id}" data-name="${UI.esc(p.provider_name)}">Delete</button>
               </td>
             </tr>`).join('')}</tbody></table></div>`
@@ -241,12 +292,6 @@ async function listings(filters) {
       });
     });
     UI.pager(v.querySelector('#list-pager'), data, (n) => again({ page: n }));
-    v.querySelectorAll('[data-verify]').forEach((b) => b.addEventListener('click', async () => {
-      if (await setStatus(b.dataset.verify, 'verified')) again();
-    }));
-    v.querySelectorAll('[data-reject]').forEach((b) => b.addEventListener('click', async () => {
-      if (await setStatus(b.dataset.reject, 'rejected', b.dataset.name)) again();
-    }));
     v.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', (e) => {
       e.preventDefault(); show('form', Number(b.dataset.edit));
     }));
@@ -268,15 +313,24 @@ async function providerForm(id = null) {
     location: '', qualifications: '', contact_email: '', verification_status: 'pending',
   };
   let files = [];
-  let historyRows = [];
+  let events = [];
+  let requirements = [];
+  let nextStates = [];
+  let areaList = [];
+  try { areaList = (await API.adminAreas()).areas.filter((a) => a.is_active); } catch { /* form still works */ }
   if (id) {
     loading();
-    try { ({ provider: p, media: files, history: historyRows } = await API.adminProvider(id)); }
-    catch (err) { failed(err); return; }
+    try {
+      ({
+        provider: p, media: files, events, requirements, next_states: nextStates,
+      } = await API.adminProvider(id));
+    } catch (err) { failed(err); return; }
   }
   const evidence = files.filter((m) => m.media_type === 'evidence');
   const images = files.filter((m) => m.media_type === 'image');
   const queued = { evidence: [], image: [] };
+  const docOptions = (sel = '') => Object.entries(DOC_LABELS)
+    .map(([k, label]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${UI.esc(label)}</option>`).join('');
 
   view().innerHTML = `
     <form id="provider-form" class="layout form-layout" novalidate>
@@ -294,26 +348,51 @@ async function providerForm(id = null) {
         <div class="form-row">
           <div class="field"><label for="service_tags">Service tags (comma separated)</label>
             <input id="service_tags" value="${UI.esc(p.service_tags || '')}" placeholder="lactation, home visit" maxlength="255"></div>
-          <div class="field"><label for="location">Location</label>
-            <input id="location" value="${UI.esc(p.location || '')}" placeholder="Area / estate / town" required maxlength="120"></div>
+          <div class="field"><label for="location">Primary area</label>
+            <input id="location" value="${UI.esc(p.location || '')}" placeholder="Area / estate / town"
+              required maxlength="120" list="area-options">
+            <datalist id="area-options">${areaList.map((a) => `<option value="${UI.esc(a.area_name)}">`).join('')}</datalist></div>
         </div>
+        ${areaList.length ? `<fieldset class="field area-set"><legend>Also serves</legend>
+          <div class="area-grid">${areaList.map((a) => `<label class="check">
+            <input type="checkbox" name="area" value="${Number(a.area_id)}"${(p.area_ids || []).includes(Number(a.area_id)) ? ' checked' : ''}>
+            ${UI.esc(a.area_name)}</label>`).join('')}</div>
+          <div class="muted">Areas the provider visits or takes clients from. The primary area is always included.
+            Never enter a home address.</div></fieldset>` : ''}
         <div class="field"><label for="qualifications">Qualifications</label>
           <textarea id="qualifications" maxlength="2000">${UI.esc(p.qualifications || '')}</textarea></div>
         <div class="field"><label for="contact_email">Contact email</label>
           <input id="contact_email" type="email" value="${UI.esc(p.contact_email || '')}" placeholder="info@provider.co.ke"></div>
         <div class="button-row">
-          <button class="btn" type="submit" data-then="">Save listing</button>
-          <button class="btn secondary" type="submit" data-then="verified">Save and verify</button>
+          <button class="btn" type="submit">Save listing</button>
           <button class="btn secondary" type="button" id="cancel">Cancel</button>
         </div>
         <div class="error-text hidden" id="form-error" role="alert"></div>
       </div>
       <div class="side-stack">
         <div class="panel">
-          <h2>Supporting evidence</h2>
-          <p class="muted">Licences and certificates. PDF, JPG or PNG, up to 5 MB each. Only administrators can open these.</p>
-          <ul class="file-list" id="evidence-list">${evidence.map(fileRow).join('')}</ul>
-          <label class="drop" for="evidence-input">Choose files to attach
+          <h2>Verification</h2>
+          ${id ? `<p>Status: ${UI.statusBadge(p.verification_status)}</p>
+            ${requirements.length ? `<h3>Required documents</h3>
+              <ul class="checklist">${requirements.map((r) => `<li class="${r.satisfied ? 'ok' : 'todo'}">
+                <span aria-hidden="true">${r.satisfied ? '✓' : '○'}</span>
+                ${UI.esc(r.label)} <span class="muted">${r.satisfied ? 'accepted and current' : 'still needed'}</span></li>`).join('')}</ul>` : ''}
+            ${nextStates.length ? `<div class="button-row">${nextStates.map((s) => `
+              <button class="btn ${MOVES[s]?.danger ? 'danger' : s === 'verified' ? '' : 'secondary'} small"
+                type="button" data-move="${s}">${UI.esc(MOVES[s]?.button || UI.STATUS_LABELS[s])}</button>`).join('')}</div>` : ''}`
+    : '<p>New listings start as <strong>pending</strong>. Save first, then attach and review documents.</p>'}
+          <p class="muted">Only verified listings appear in search and recommendations.
+            Approval needs an accepted, current copy of every required document.</p>
+          ${events.length ? `<h3>History</h3><ul class="history">${events.map((h) => `
+            <li><strong>${UI.esc(h.from_status ? `${UI.STATUS_LABELS[h.from_status] || h.from_status} → ` : '')}${UI.esc(UI.STATUS_LABELS[h.to_status] || h.to_status)}</strong>
+              · ${UI.fmtDate(h.created_at, true)} · ${UI.esc(h.actor_name || 'automatic')}
+              ${h.reason ? `<div class="muted">${UI.esc(h.reason)}</div>` : ''}</li>`).join('')}</ul>` : ''}
+        </div>
+        <div class="panel">
+          <h2>Verification documents</h2>
+          <p class="muted">PDF, JPG or PNG, up to 5 MB each. Only administrators can open these, and every opening is logged.</p>
+          <ul class="file-list doc-list" id="evidence-list">${evidence.map(docRow).join('')}</ul>
+          <label class="drop" for="evidence-input">Choose documents to attach
             <input id="evidence-input" type="file" accept="application/pdf,image/png,image/jpeg" multiple></label>
         </div>
         <div class="panel">
@@ -322,17 +401,6 @@ async function providerForm(id = null) {
           <ul class="file-list" id="image-list">${images.map(fileRow).join('')}</ul>
           <label class="drop" for="image-input">Choose an image
             <input id="image-input" type="file" accept="image/png,image/jpeg"></label>
-        </div>
-        <div class="panel">
-          <h2>Verification status</h2>
-          ${id ? `<fieldset class="status-set"><legend class="sr-only">Verification status</legend>
-            ${['pending', 'verified', 'rejected'].map((s) => `<label class="check">
-              <input type="radio" name="status" value="${s}"${p.verification_status === s ? ' checked' : ''}> ${s[0].toUpperCase() + s.slice(1)}</label>`).join('')}
-          </fieldset>` : '<p>New listings start as <strong>pending</strong>.</p>'}
-          <p class="muted">Only verified listings appear in search and recommendations.</p>
-          ${historyRows.length ? `<h3>History</h3><ul class="history">${historyRows.map((h) => `
-            <li><strong>${UI.esc(h.action_type)}</strong> · ${UI.fmtDate(h.performed_at, true)} · ${UI.esc(h.admin_name || '')}
-              ${h.notes ? `<div class="muted">${UI.esc(h.notes)}</div>` : ''}</li>`).join('')}</ul>` : ''}
         </div>
       </div>
     </form>`;
@@ -346,6 +414,18 @@ async function providerForm(id = null) {
       try { await API.adminDeleteMedia(b.dataset.removeFile); b.closest('li').remove(); UI.toast('File removed'); }
       catch (err) { UI.toast(err.message, true); }
     }));
+    listEl.querySelectorAll('[data-accept-doc]').forEach((b) => b.addEventListener('click', async () => {
+      try { await API.adminReviewDocument(b.dataset.acceptDoc, 'accepted'); UI.toast('Document accepted'); show('form', id); }
+      catch (err) { UI.toast(errText(err), true); }
+    }));
+    listEl.querySelectorAll('[data-reject-doc]').forEach((b) => b.addEventListener('click', async () => {
+      const note = await askReason('this document', {
+        reason: 'Reject document', help: 'Say what is wrong with it, e.g. unreadable, expired or the wrong person.',
+      });
+      if (!note) return;
+      try { await API.adminReviewDocument(b.dataset.rejectDoc, 'rejected', note); UI.toast('Document rejected'); show('form', id); }
+      catch (err) { UI.toast(errText(err), true); }
+    }));
     listEl.querySelectorAll('[data-unqueue]').forEach((b) => b.addEventListener('click', () => {
       const [kind, idx] = b.dataset.unqueue.split(':');
       queued[kind][Number(idx)] = null;
@@ -355,11 +435,17 @@ async function providerForm(id = null) {
   bindFileRows(v.querySelector('#evidence-list'));
   bindFileRows(v.querySelector('#image-list'));
 
+  // Evidence rows ask what the document is and when it expires before upload.
   const queue = (kind, input, listEl) => {
     [...input.files].forEach((file) => {
       if (file.size > 5 * 1024 * 1024) { UI.toast(`${file.name} is over 5 MB`, true); return; }
-      const idx = queued[kind].push(file) - 1;
-      listEl.insertAdjacentHTML('beforeend', `<li class="queued"><span>${UI.esc(file.name)}</span>
+      const idx = queued[kind].push({ file }) - 1;
+      const meta = kind === 'evidence' ? `
+        <label class="sr-only" for="qt-${idx}">Document type</label>
+        <select id="qt-${idx}" data-qtype="${idx}" required><option value="">Document type…</option>${docOptions()}</select>
+        <label class="inline-label" for="qe-${idx}">Expires</label>
+        <input id="qe-${idx}" type="date" data-qexp="${idx}">` : '';
+      listEl.insertAdjacentHTML('beforeend', `<li class="queued"><span>${UI.esc(file.name)}</span>${meta}
         <span class="muted">uploads on save</span>
         <button class="btn secondary small" type="button" data-unqueue="${kind}:${idx}">Remove</button></li>`);
     });
@@ -369,6 +455,12 @@ async function providerForm(id = null) {
   v.querySelector('#evidence-input').addEventListener('change', (e) => queue('evidence', e.target, v.querySelector('#evidence-list')));
   v.querySelector('#image-input').addEventListener('change', (e) => queue('image', e.target, v.querySelector('#image-list')));
 
+  v.querySelectorAll('[data-move]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    if (await setStatus(id, b.dataset.move, `"${p.provider_name}"`)) show('form', id);
+    else b.disabled = false;
+  }));
+
   const read = () => ({
     provider_name: v.querySelector('#provider_name').value.trim(),
     category_id: Number(v.querySelector('#category_id').value) || undefined,
@@ -377,6 +469,7 @@ async function providerForm(id = null) {
     location: v.querySelector('#location').value.trim(),
     qualifications: v.querySelector('#qualifications').value.trim() || undefined,
     contact_email: v.querySelector('#contact_email').value.trim() || undefined,
+    area_ids: [...v.querySelectorAll('input[name="area"]:checked')].map((x) => Number(x.value)),
   });
 
   const form = v.querySelector('#provider-form');
@@ -384,9 +477,18 @@ async function providerForm(id = null) {
     e.preventDefault();
     const errBox = v.querySelector('#form-error');
     errBox.classList.add('hidden');
-    const radio = v.querySelector('input[name="status"]:checked');
-    let target = e.submitter?.dataset.then || (radio ? radio.value : '');
-    if (id && target === p.verification_status) target = '';
+    // Every queued document needs a type before anything is saved.
+    for (const [i, q] of queued.evidence.entries()) {
+      if (!q) continue;
+      q.document_type = v.querySelector(`[data-qtype="${i}"]`).value;
+      q.expires_on = v.querySelector(`[data-qexp="${i}"]`).value || undefined;
+      if (!q.document_type) {
+        errBox.textContent = `Choose a document type for ${q.file.name}.`;
+        errBox.classList.remove('hidden');
+        v.querySelector(`[data-qtype="${i}"]`).focus();
+        return;
+      }
+    }
     const buttons = [...form.querySelectorAll('button')];
     buttons.forEach((b) => { b.disabled = true; });
     try {
@@ -395,18 +497,13 @@ async function providerForm(id = null) {
       const pid = id || saved.provider_id;
       let uploadErrors = 0;
       for (const kind of ['evidence', 'image']) {
-        for (const file of queued[kind].filter(Boolean)) {
-          try { await API.adminUpload(pid, kind, file); } catch (err) {
-            uploadErrors += 1; UI.toast(`${file.name}: ${err.message}`, true);
+        for (const q of queued[kind].filter(Boolean)) {
+          try { await API.adminUpload(pid, kind, q.file, q); } catch (err) {
+            uploadErrors += 1; UI.toast(`${q.file.name}: ${errText(err)}`, true);
           }
         }
       }
-      if (target) {
-        const ok = await setStatus(pid, target, `"${body.provider_name}"`);
-        if (!ok) { buttons.forEach((b) => { b.disabled = false; }); show('form', pid); return; }
-      } else {
-        UI.toast(uploadErrors ? 'Listing saved; some files did not upload' : 'Listing saved');
-      }
+      UI.toast(uploadErrors ? 'Listing saved; some files did not upload' : 'Listing saved');
       show('form', pid);
     } catch (err) {
       errBox.textContent = errText(err);
@@ -421,6 +518,24 @@ function fileRow(m) {
   const kind = m.file_path.split('.').pop().toUpperCase();
   return `<li><span>${UI.esc(kind)} file #${m.media_id}</span>
     <button class="btn secondary small" type="button" data-download="${m.media_id}" data-file="${UI.esc(m.file_path)}">Download</button>
+    <button class="btn secondary small" type="button" data-remove-file="${m.media_id}">Remove</button></li>`;
+}
+
+/** One verification document: what it is, its version, expiry and review. */
+function docRow(m) {
+  const d = new Date();  // local calendar day, as the server judges expiry
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const exp = m.expires_on ? String(m.expires_on).slice(0, 10) : null;
+  const expired = exp && exp < today;
+  const review = { accepted: 'Accepted', rejected: 'Rejected', pending: 'Awaiting review' }[m.review_status] || 'Awaiting review';
+  return `<li class="doc">
+    <span><strong>${UI.esc(DOC_LABELS[m.document_type] || 'Document')}</strong> · v${Number(m.version || 1)}
+      <span class="muted">${exp ? `${expired ? 'expired' : 'expires'} ${UI.fmtDate(exp)}` : 'no expiry date'}</span>
+      <span class="doc-status ${expired ? 'bad' : m.review_status || 'pending'}">${expired ? 'Expired' : review}</span>
+      ${m.review_note ? `<span class="muted">“${UI.esc(m.review_note)}”${m.reviewer_name ? ` — ${UI.esc(m.reviewer_name)}` : ''}</span>` : ''}</span>
+    <button class="btn secondary small" type="button" data-download="${m.media_id}" data-file="${UI.esc(m.file_path)}">Open</button>
+    ${m.review_status !== 'accepted' ? `<button class="btn small" type="button" data-accept-doc="${m.media_id}">Accept</button>` : ''}
+    ${m.review_status !== 'rejected' ? `<button class="btn secondary small" type="button" data-reject-doc="${m.media_id}">Reject</button>` : ''}
     <button class="btn secondary small" type="button" data-remove-file="${m.media_id}">Remove</button></li>`;
 }
 
@@ -441,7 +556,8 @@ async function categoryAdmin(editing = null) {
           <tbody>${categories.map((c) => `<tr class="${c.parent_category_id ? 'child-row' : 'type-row'}">
             <td>${c.parent_category_id ? '<span class="indent" aria-hidden="true">└</span>' : ''}<strong>${UI.esc(c.category_name)}</strong>
               ${c.description ? `<div class="muted">${UI.esc(c.description)}</div>` : ''}</td>
-            <td>${c.child_count ? `<span class="muted">${c.child_count} sub-categories</span>` : `${c.verified_count} / ${c.provider_count}`}</td>
+            <td>${c.child_count ? `<span class="muted">${c.child_count} sub-categories</span>` : `${c.verified_count} / ${c.provider_count}`}
+              ${c.required_documents ? `<div class="muted">Needs: ${c.required_documents.split(',').map((d) => UI.esc(DOC_LABELS[d] || d)).join(', ')}</div>` : ''}</td>
             <td class="actions">
               <button class="btn secondary small" type="button" data-edit-cat="${c.category_id}">Edit</button>
               <button class="btn danger small" type="button" data-del-cat="${c.category_id}"
@@ -460,6 +576,12 @@ async function categoryAdmin(editing = null) {
             </select></div>
           <div class="field"><label for="cat-desc">Description</label>
             <textarea id="cat-desc" maxlength="1000">${UI.esc(cur?.description || '')}</textarea></div>
+          <fieldset class="field doc-reqs"><legend>Documents required before a listing is verified</legend>
+            ${Object.entries(DOC_LABELS).filter(([k]) => k !== 'other').map(([k, label]) => `<label class="check">
+              <input type="checkbox" name="req-doc" value="${k}"${String(cur?.required_documents || '').split(',').includes(k) ? ' checked' : ''}>
+              ${UI.esc(label)}</label>`).join('')}
+            <div class="muted">Leave all unticked to use the service type's list (or identity only for a service type).</div>
+          </fieldset>
           <div class="button-row">
             <button class="btn" type="submit">${cur ? 'Save changes' : 'Add category'}</button>
             ${cur ? '<button class="btn secondary" type="button" id="cat-cancel">Cancel</button>' : ''}
@@ -485,6 +607,7 @@ async function categoryAdmin(editing = null) {
       category_name: v.querySelector('#cat-name').value.trim(),
       parent_category_id: Number(v.querySelector('#cat-parent').value) || null,
       description: v.querySelector('#cat-desc').value.trim() || undefined,
+      required_documents: [...v.querySelectorAll('input[name="req-doc"]:checked')].map((x) => x.value),
     };
     try {
       if (cur) await API.adminUpdateCategory(cur.category_id, body);
@@ -524,7 +647,9 @@ async function users(filters) {
             <td class="muted">${u.interactions} interactions · ${u.saved} saved · ${u.searches} searches</td>
             <td>${Number(u.user_id) === Number(me.user_id) ? '<span class="muted">you</span>'
     : `<button class="btn secondary small" type="button" data-role="${u.user_id}" data-to="${u.role === 'admin' ? 'user' : 'admin'}"
-                  data-name="${UI.esc(u.full_name)}">${u.role === 'admin' ? 'Remove admin' : 'Make admin'}</button>`}</td>
+                  data-name="${UI.esc(u.full_name)}">${u.role === 'admin' ? 'Remove admin' : 'Make admin'}</button>
+       ${u.role === 'admin' ? '' : `<button class="btn danger small" type="button" data-delete="${u.user_id}"
+                  data-name="${UI.esc(u.full_name)}">Delete account</button>`}`}</td>
           </tr>`).join('')}</tbody></table></div>
         <div class="pagination" id="user-pager"></div>
       </div>`;
@@ -540,6 +665,13 @@ async function users(filters) {
         ? `Give ${b.dataset.name} administrator access? They will be able to verify and delete listings.`
         : `Remove administrator access from ${b.dataset.name}?`)) return;
       try { await API.adminSetRole(b.dataset.role, to); UI.toast('Role updated'); users(f); }
+      catch (err) { UI.toast(err.message, true); }
+    }));
+    v.querySelectorAll('[data-delete]').forEach((b) => b.addEventListener('click', async () => {
+      if (!window.confirm(`Delete ${b.dataset.name}'s account and everything recorded about them? This cannot be undone.`)) return;
+      const reason = window.prompt('Reason, for the audit log (optional):', 'deleted at the parent\'s request');
+      if (reason === null) return;
+      try { await API.adminDeleteUser(b.dataset.delete, reason.trim()); UI.toast('Account deleted'); users(f); }
       catch (err) { UI.toast(err.message, true); }
     }));
   } catch (err) { failed(err); }
@@ -626,4 +758,108 @@ async function logs(page) {
     UI.pager(view().querySelector('#log-pager'),
       { page: data.page, pages: Math.ceil(data.total / data.per_page) }, (n) => logs(n));
   } catch (err) { failed(err); }
+}
+
+/* --------------------------------------------------------- model versions */
+async function modelVersions(box) {
+  if (!box) return;
+  let data;
+  try { data = await API.adminModelVersions(); } catch {
+    box.innerHTML = '<h2>Model versions</h2><p class="muted">The recommendation service is unreachable.</p>';
+    return;
+  }
+  const fmt = (x) => (x === undefined || x === null ? '—' : Number(x).toFixed(3));
+  box.innerHTML = `
+    <div class="panel-head"><h2>Model versions</h2>
+      ${data.history.length ? '<button class="btn secondary small" type="button" id="model-rollback">Roll back to previous</button>' : ''}</div>
+    <p class="muted">Offline metrics on held-out interactions (${UI.esc(data.versions[0]?.metrics?.protocol || 'no evaluation yet')}).
+      They measure ranking on past behaviour, not how satisfied parents are.</p>
+    ${data.versions.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Version</th><th>Status</th><th>Recall@10</th><th>nDCG@10</th><th>Settings</th><th>Decision</th><th><span class="sr-only">Action</span></th></tr></thead>
+      <tbody>${data.versions.slice(0, 8).map((m) => `<tr>
+        <td>${UI.esc(m.id)}<div class="muted">${UI.esc(m.created_at)}</div></td>
+        <td>${m.id === data.production ? '<strong>Serving</strong>' : UI.esc(String(m.status).replace('_', ' '))}</td>
+        <td>${fmt(m.metrics?.recall)}${m.comparison ? `<div class="muted">serving then: ${fmt(m.comparison.production?.recall)}</div>` : ''}</td>
+        <td>${fmt(m.metrics?.ndcg)}</td>
+        <td class="muted">α ${fmt(m.params?.alpha)} · location ${fmt(m.params?.location_weight)} · quality ${fmt(m.params?.quality_weight)}</td>
+        <td class="muted">${UI.esc(m.decision?.reason || '')}</td>
+        <td>${m.id !== data.production ? `<button class="btn secondary small" type="button" data-promote="${UI.esc(m.id)}">Promote</button>` : ''}</td>
+      </tr>`).join('')}</tbody></table></div>` : '<p class="muted">No versions yet.</p>'}`;
+  box.querySelectorAll('[data-promote]').forEach((b) => b.addEventListener('click', async () => {
+    if (!window.confirm(`Serve version ${b.dataset.promote} to everyone now?`)) return;
+    b.disabled = true;
+    try { await API.adminPromoteModel(b.dataset.promote); UI.toast(`Version ${b.dataset.promote} is now serving`); dashboard(); }
+    catch (err) { UI.toast(errText(err), true); b.disabled = false; }
+  }));
+  box.querySelector('#model-rollback')?.addEventListener('click', async (e) => {
+    if (!window.confirm('Return to the previous serving version?')) return;
+    e.target.disabled = true;
+    try { const out = await API.adminRollbackModel(); UI.toast(`Rolled back to ${out.production?.id || 'the previous version'}`); dashboard(); }
+    catch (err) { UI.toast(errText(err), true); e.target.disabled = false; }
+  });
+}
+
+/* ---------------------------------------------------------- service areas */
+async function areaAdmin(editing = null) {
+  loading();
+  let list = [];
+  try { list = (await API.adminAreas()).areas; } catch (err) { failed(err); return; }
+  const cur = editing ? list.find((a) => a.area_id === editing) : null;
+  const num = (x) => (x === null || x === undefined ? '' : Number(x));
+  view().innerHTML = `
+    <div class="layout dash-layout">
+      <div class="panel">
+        <h2>Service areas (${list.length})</h2>
+        <p class="muted">Parents filter by these areas, and distances in search are measured between their centres.
+          Centres are approximate neighbourhood points, never addresses.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Area</th><th>Centre</th><th>Providers</th><th>Status</th><th><span class="sr-only">Action</span></th></tr></thead>
+          <tbody>${list.map((a) => `<tr>
+            <td><strong>${UI.esc(a.area_name)}</strong></td>
+            <td class="muted">${a.latitude === null ? 'not set' : `${Number(a.latitude).toFixed(4)}, ${Number(a.longitude).toFixed(4)}`}</td>
+            <td>${Number(a.provider_count)}</td>
+            <td>${a.is_active ? 'Active' : 'Hidden'}</td>
+            <td><button class="btn secondary small" type="button" data-edit-area="${Number(a.area_id)}">Edit</button></td>
+          </tr>`).join('')}</tbody></table></div>
+      </div>
+      <div class="panel">
+        <h2>${cur ? `Edit ${UI.esc(cur.area_name)}` : 'Add an area'}</h2>
+        <form id="area-form" novalidate>
+          <div class="field"><label for="area-name">Name</label>
+            <input id="area-name" value="${UI.esc(cur?.area_name || '')}" required maxlength="120"></div>
+          <div class="form-row">
+            <div class="field"><label for="area-lat">Centre latitude</label>
+              <input id="area-lat" inputmode="decimal" value="${num(cur?.latitude)}" placeholder="-1.2921"></div>
+            <div class="field"><label for="area-lng">Centre longitude</label>
+              <input id="area-lng" inputmode="decimal" value="${num(cur?.longitude)}" placeholder="36.7856"></div>
+          </div>
+          <label class="check"><input type="checkbox" id="area-active"${!cur || cur.is_active ? ' checked' : ''}>
+            Show this area to parents</label>
+          <div class="button-row">
+            <button class="btn" type="submit">${cur ? 'Save changes' : 'Add area'}</button>
+            ${cur ? '<button class="btn secondary" type="button" id="area-cancel">Cancel</button>' : ''}
+          </div>
+          <div class="error-text hidden" id="area-error" role="alert"></div>
+        </form>
+      </div>
+    </div>`;
+  const v = view();
+  v.querySelectorAll('[data-edit-area]').forEach((b) => b.addEventListener('click', () => areaAdmin(Number(b.dataset.editArea))));
+  v.querySelector('#area-cancel')?.addEventListener('click', () => areaAdmin());
+  v.querySelector('#area-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errBox = v.querySelector('#area-error');
+    errBox.classList.add('hidden');
+    const val = (sel) => { const t = v.querySelector(sel).value.trim(); return t === '' ? null : Number(t); };
+    const body = {
+      area_name: v.querySelector('#area-name').value.trim(),
+      latitude: val('#area-lat'), longitude: val('#area-lng'),
+      is_active: v.querySelector('#area-active').checked,
+    };
+    try {
+      if (cur) await API.adminUpdateArea(cur.area_id, body); else await API.adminCreateArea(body);
+      UI.toast(cur ? 'Area updated' : 'Area added');
+      areaAdmin();
+    } catch (err) { errBox.textContent = errText(err); errBox.classList.remove('hidden'); }
+  });
 }

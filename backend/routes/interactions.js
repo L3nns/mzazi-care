@@ -40,12 +40,41 @@ router.post(
     if (!provider) return res.status(404).json({ error: 'provider not found' });
 
     const weight = WEIGHTS[interaction_type] * (rating_value ? rating_value / 4 : 1);
-    const result = await query(
-      `INSERT INTO interactions
-         (user_id, provider_id, interaction_type, rating_value, interaction_weight)
-       VALUES (?, ?, ?, ?, ?)`,
-      [req.user.user_id, provider_id, interaction_type, rating_value, weight.toFixed(2)],
-    );
+    const row = [req.user.user_id, provider_id, interaction_type, rating_value, weight.toFixed(2)];
+    let result;
+    if (interaction_type === 'rating') {
+      // One rating per parent per provider (unique key uq_one_rating): rating
+      // again changes it, so neither a change of mind nor repetition can count
+      // twice in the average or in the engine's quality score.
+      result = await query(
+        `INSERT INTO interactions
+           (user_id, provider_id, interaction_type, rating_value, interaction_weight)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE rating_value = VALUES(rating_value),
+           interaction_weight = VALUES(interaction_weight), created_at = CURRENT_TIMESTAMP,
+           interaction_id = LAST_INSERT_ID(interaction_id)`, row);
+    } else if (interaction_type === 'view') {
+      // At most one view per parent, per provider, per day: reloading a page
+      // must not inflate popularity or the parent's own profile.
+      result = await query(
+        `INSERT INTO interactions
+           (user_id, provider_id, interaction_type, rating_value, interaction_weight)
+         SELECT ?, ?, ?, ?, ? FROM DUAL
+         WHERE NOT EXISTS (SELECT 1 FROM interactions
+           WHERE user_id = ? AND provider_id = ? AND interaction_type = 'view'
+             AND created_at >= CURDATE())`,
+        [...row, req.user.user_id, provider_id]);
+      if (!result.affectedRows) {
+        return res.status(200).json({ provider_id, interaction_type, recorded: false });
+      }
+    } else {
+      result = await query(
+        `INSERT INTO interactions
+           (user_id, provider_id, interaction_type, rating_value, interaction_weight)
+         VALUES (?, ?, ?, ?, ?)`, row);
+    }
+    // affectedRows is 2 when ON DUPLICATE KEY UPDATE changed an existing rating.
+    const updated = interaction_type === 'rating' && result.affectedRows > 1;
 
     // A save is also a row in saved_services (the ERD keeps both).
     if (interaction_type === 'save') {
@@ -56,11 +85,13 @@ router.post(
       );
     }
 
-    return res.status(201).json({
+    return res.status(updated ? 200 : 201).json({
       interaction_id: result.insertId,
       provider_id,
       interaction_type,
       interaction_weight: Number(weight.toFixed(2)),
+      recorded: true,
+      ...(interaction_type === 'rating' ? { updated } : {}),
     });
   }),
 );
